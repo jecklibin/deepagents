@@ -24,6 +24,7 @@ from deepagents_cli.config import COLORS, config, console, get_default_coding_in
 from deepagents_cli.integrations.sandbox_factory import get_default_working_dir
 from deepagents_cli.shell import ShellMiddleware
 from deepagents_cli.skills import SkillsMiddleware
+from langchain_mcp_adapters.client import MultiServerMCPClient
 
 
 def list_agents() -> None:
@@ -85,7 +86,7 @@ def reset_agent(agent_name: str, source_agent: str | None = None) -> None:
 
     agent_dir.mkdir(parents=True, exist_ok=True)
     agent_md = agent_dir / "agent.md"
-    agent_md.write_text(source_content)
+    agent_md.write_text(source_content, encoding="utf-8")
 
     console.print(f"✓ Agent '{agent_name}' reset to {action_desc}", style=COLORS["primary"])
     console.print(f"Location: {agent_dir}\n", style=COLORS["dim"])
@@ -382,6 +383,18 @@ def create_cli_agent(
 
     # Build middleware stack based on enabled features
     agent_middleware = []
+
+    # Load Playwright MCP tools with client kept alive
+    # mcp_client = None
+    # try:
+    #     mcp_client = MultiServerMCPClient(
+    #         {"playwright": {"command": "npx", "args": ["@playwright/mcp@latest"], "transport": "stdio"}}
+    #     )
+    #     playwright_tools = await mcp_client.get_tools()
+    #     tools.extend(playwright_tools)
+    #     console.print(f"[green]✓ Playwright MCP loaded: {len(playwright_tools)} tools[/green]")
+    # except Exception as e:
+    #     console.print(f"[yellow]⚠ Playwright MCP not available: {e}[/yellow]")
 
     # CONDITIONAL SETUP: Local vs Remote Sandbox
     if sandbox is None:

@@ -397,7 +397,7 @@ def get_default_coding_instructions() -> str:
     Long-term memory (agent.md) is handled separately by the middleware.
     """
     default_prompt_path = Path(__file__).parent / "default_agent_prompt.md"
-    return default_prompt_path.read_text()
+    return default_prompt_path.read_text(encoding="utf-8")
 
 
 def _detect_provider(model_name: str) -> str | None:
@@ -493,8 +493,10 @@ def create_model(model_name_override: str | None = None) -> BaseChatModel:
     # Create and return the model
     if provider == "openai":
         from langchain_openai import ChatOpenAI
+        api_key = os.environ.get("OPENAI_API_KEY")
+        base_url = os.environ.get("OPENAI_BASE_URL")
 
-        return ChatOpenAI(model=model_name)
+        return ChatOpenAI(model=model_name, api_key=api_key, base_url=base_url)
     if provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
