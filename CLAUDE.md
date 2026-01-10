@@ -8,6 +8,7 @@ DeepAgents is a LangGraph-based agent framework implementing patterns for long-h
 
 - **deepagents** - Core agent library with middleware system, backends, and subagent support
 - **deepagents-cli** - Interactive CLI with memory, skills, and human-in-the-loop workflows
+- **deepagents-web** - Web service and frontend with WebSocket chat and skill management
 - **harbor** - Evaluation framework for benchmarking agents
 - **acp** - Agent Client Protocol support (work in progress)
 
@@ -65,6 +66,40 @@ ruff check .
 ruff format .
 ```
 
+### Web Service (deepagents-web)
+
+```bash
+cd libs/deepagents-web
+
+# Install dependencies
+uv sync --all-groups
+
+# Run web service during development
+uv run deepagents-web
+
+# Run tests
+pytest
+
+# Run linting
+ruff check .
+
+# Format code
+ruff format .
+```
+
+### Running the Web Service
+
+```bash
+# Basic usage (starts on http://localhost:8000)
+deepagents-web
+
+# With custom host/port
+deepagents-web --host 0.0.0.0 --port 3000
+
+# Auto-approve tool usage (skip HITL)
+deepagents-web --auto-approve
+```
+
 ### Running the CLI
 
 ```bash
@@ -120,6 +155,13 @@ deepagents skills create my-skill
 - [libs/deepagents-cli/deepagents_cli/agent_memory.py](libs/deepagents-cli/deepagents_cli/agent_memory.py) - AgentMemoryMiddleware for loading agent.md files
 - [libs/deepagents-cli/deepagents_cli/skills/](libs/deepagents-cli/deepagents_cli/skills/) - Skills system implementation
 
+**Web Service**:
+- [libs/deepagents-web/deepagents_web/main.py](libs/deepagents-web/deepagents_web/main.py) - FastAPI app entry point
+- [libs/deepagents-web/deepagents_web/api/chat.py](libs/deepagents-web/deepagents_web/api/chat.py) - WebSocket endpoint for real-time chat
+- [libs/deepagents-web/deepagents_web/api/skills.py](libs/deepagents-web/deepagents_web/api/skills.py) - REST endpoints for skill CRUD
+- [libs/deepagents-web/deepagents_web/services/agent_service.py](libs/deepagents-web/deepagents_web/services/agent_service.py) - Agent session management and streaming
+- [libs/deepagents-web/deepagents_web/static/](libs/deepagents-web/deepagents_web/static/) - Frontend HTML/CSS/JS
+
 ### Data Flow
 
 1. User input → CLI (`main.py`)
@@ -170,7 +212,7 @@ The virtual filesystem uses Unix-style paths starting with `/`. Windows paths li
 
 ## Code Style
 
-- Line length: 150 chars (deepagents), 100 chars (deepagents-cli)
+- Line length: 150 chars (deepagents), 100 chars (deepagents-cli, deepagents-web)
 - Docstring style: Google format
 - Type hints: Required (mypy strict mode)
 - Formatting: Ruff with `docstring-code-format = true`
@@ -199,6 +241,10 @@ The virtual filesystem uses Unix-style paths starting with `/`. Windows paths li
 
 **Web Search**:
 - `TAVILY_API_KEY` - Required for web_search tool
+
+**Web Service**:
+- `DEEPAGENTS_WEB_HOST` - Host to bind (default: 127.0.0.1)
+- `DEEPAGENTS_WEB_PORT` - Port to bind (default: 8000)
 
 ## Common Patterns
 

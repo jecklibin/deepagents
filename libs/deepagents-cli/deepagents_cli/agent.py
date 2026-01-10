@@ -22,9 +22,9 @@ from langgraph.runtime import Runtime
 from deepagents_cli.agent_memory import AgentMemoryMiddleware
 from deepagents_cli.config import COLORS, config, console, get_default_coding_instructions, settings
 from deepagents_cli.integrations.sandbox_factory import get_default_working_dir
+from deepagents_cli.mcp_proxy import get_mcp_tools
 from deepagents_cli.shell import ShellMiddleware
 from deepagents_cli.skills import SkillsMiddleware
-from langchain_mcp_adapters.client import MultiServerMCPClient
 
 
 def list_agents() -> None:
@@ -384,21 +384,10 @@ async def create_cli_agent(
     # Build middleware stack based on enabled features
     agent_middleware = []
 
-    # Load Playwright MCP tools with client kept alive
-    mcp_client = None
+    # Load Playwright MCP tools with persistent session
     try:
-        mcp_client = MultiServerMCPClient(
-            {
-                "playwright": {
-                    "command": "npx",
-                    "args": ["@playwright/mcp@latest"],
-                    "transport": "stdio",
-                }
-            }
-        )
-        playwright_tools = await mcp_client.get_tools()
-        tools.extend(playwright_tools)
-        console.print(f"[green]✓ Playwright MCP loaded: {len(playwright_tools)} tools[/green]")
+        mcp_tools = await get_mcp_tools()
+        tools.extend(mcp_tools)
     except Exception as e:
         console.print(f"[yellow]⚠ Playwright MCP not available: {e}[/yellow]")
 
