@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepAgents Web</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar">
+            <div class="logo">
+                <h1>DeepAgents</h1>
+            </div>
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="chat">Chat</button>
+                <button class="nav-tab" data-tab="skills">Skills</button>
+            </div>
+        </nav>
+
+        <main class="main-content">
+            <!-- Chat Panel -->
+            <div id="chat-panel" class="panel active">
+                <div class="chat-container">
+                    <div id="messages" class="messages"></div>
+                    <div id="todo-list" class="todo-list hidden"></div>
+                </div>
+                <div class="input-container">
+                    <textarea id="user-input" placeholder="Type your message..." rows="1"></textarea>
+                    <button id="send-btn" class="send-btn">Send</button>
+                </div>
+            </div>
+
+            <!-- Skills Panel -->
+            <div id="skills-panel" class="panel">
+                <div class="skills-header">
+                    <h2>Skills</h2>
+                    <button id="create-skill-btn" class="btn-primary">Create Skill</button>
+                </div>
+                <div id="skills-list" class="skills-list"></div>
+            </div>
+        </main>
+
+        <!-- Skill Modal -->
+        <div id="skill-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modal-title">Create Skill</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="skill-name">Name</label>
+                        <input type="text" id="skill-name" placeholder="my-skill">
+                    </div>
+                    <div class="form-group">
+                        <label for="skill-description">Description</label>
+                        <input type="text" id="skill-description" placeholder="Brief description">
+                    </div>
+                    <div class="form-group">
+                        <label for="skill-content">SKILL.md Content</label>
+                        <textarea id="skill-content" rows="15" placeholder="---
+name: my-skill
+description: Brief description
+---
+
+# My Skill
+
+## When to Use
+..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary modal-cancel">Cancel</button>
+                    <button id="save-skill-btn" class="btn-primary">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interrupt Modal -->
+        <div id="interrupt-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Tool Approval Required</h3>
+                </div>
+                <div class="modal-body">
+                    <div id="interrupt-details"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="reject-btn" class="btn-danger">Reject</button>
+                    <button id="approve-btn" class="btn-primary">Approve</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/chat.js"></script>
+    <script src="/static/js/skills.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+[project]
+name = "deepagents-web"
+version = "0.0.1"
+description = "Web service and frontend for DeepAgents"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11,<4.0"
+dependencies = [
+  "deepagents-cli>=0.0.12",
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "websockets>=13.0",
+  "python-multipart>=0.0.12",
+  "python-dotenv",
+]
+
+[project.scripts]
+deepagents-web = "deepagents_web:main"
+
+[dependency-groups]
+test = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.3",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.27.0",
+    "ruff>=0.9.7",
+]
+
+dev = [
+    "pytest",
+    "pytest-cov",
+    "build",
+    "mypy",
+]
+
+lint = [
+    "ruff",
+    "mypy"
+]
+
+[build-system]
+requires = ["setuptools>=73.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+deepagents_web = ["static/**/*"]
+
+[tool.ruff]
+line-length = 100
+exclude = []
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",
+    "ISC001",
+    "PERF203",
+    "SLF001",
+    "PLC0415",
+    "PLR0913",
+    "PLC0414",
+    "C901",
+    "FBT002",   # Boolean default positional argument (acceptable for FastAPI Query params)
+    "ANN401",   # Dynamically typed expressions (needed for stream data handling)
+]
+unfixable = ["B028"]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+ignore-var-parameters = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "D1",
+    "S101",
+    "S311",
+    "ANN201",
+    "INP001",
+    "PLR2004",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+timeout = 10
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true
+disallow_any_generics = false
+warn_return_any = false
+
+[tool.uv.sources]
+deepagents-cli = { path = "../deepagents-cli" }

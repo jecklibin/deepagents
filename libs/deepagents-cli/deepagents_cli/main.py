@@ -329,7 +329,7 @@ async def _run_agent_session(
     if settings.has_tavily:
         tools.append(web_search)
 
-    agent, composite_backend = create_cli_agent(
+    agent, composite_backend = await create_cli_agent(
         model=model,
         assistant_id=assistant_id,
         tools=tools,

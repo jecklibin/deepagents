@@ -324,7 +324,7 @@ def _add_interrupt_on() -> dict[str, InterruptOnConfig]:
     }
 
 
-def create_cli_agent(
+async def create_cli_agent(
     model: str | BaseChatModel,
     assistant_id: str,
     *,
@@ -385,16 +385,22 @@ def create_cli_agent(
     agent_middleware = []
 
     # Load Playwright MCP tools with client kept alive
-    # mcp_client = None
-    # try:
-    #     mcp_client = MultiServerMCPClient(
-    #         {"playwright": {"command": "npx", "args": ["@playwright/mcp@latest"], "transport": "stdio"}}
-    #     )
-    #     playwright_tools = await mcp_client.get_tools()
-    #     tools.extend(playwright_tools)
-    #     console.print(f"[green]✓ Playwright MCP loaded: {len(playwright_tools)} tools[/green]")
-    # except Exception as e:
-    #     console.print(f"[yellow]⚠ Playwright MCP not available: {e}[/yellow]")
+    mcp_client = None
+    try:
+        mcp_client = MultiServerMCPClient(
+            {
+                "playwright": {
+                    "command": "npx",
+                    "args": ["@playwright/mcp@latest"],
+                    "transport": "stdio",
+                }
+            }
+        )
+        playwright_tools = await mcp_client.get_tools()
+        tools.extend(playwright_tools)
+        console.print(f"[green]✓ Playwright MCP loaded: {len(playwright_tools)} tools[/green]")
+    except Exception as e:
+        console.print(f"[yellow]⚠ Playwright MCP not available: {e}[/yellow]")
 
     # CONDITIONAL SETUP: Local vs Remote Sandbox
     if sandbox is None:
