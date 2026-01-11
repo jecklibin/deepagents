@@ -43,23 +43,32 @@
 
         <!-- Skill Modal -->
         <div id="skill-modal" class="modal hidden">
-            <div class="modal-content">
+            <div class="modal-content modal-large">
                 <div class="modal-header">
                     <h3 id="modal-title">Create Skill</h3>
                     <button class="modal-close">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <div class="form-group">
-                        <label for="skill-name">Name</label>
-                        <input type="text" id="skill-name" placeholder="my-skill">
+                    <!-- Tabs -->
+                    <div class="skill-tabs">
+                        <button class="skill-tab active" data-tab="manual">Manual</button>
+                        <button class="skill-tab" data-tab="natural-language">Natural Language</button>
+                        <button class="skill-tab" data-tab="record-browser">Record Browser</button>
                     </div>
-                    <div class="form-group">
-                        <label for="skill-description">Description</label>
-                        <input type="text" id="skill-description" placeholder="Brief description">
-                    </div>
-                    <div class="form-group">
-                        <label for="skill-content">SKILL.md Content</label>
-                        <textarea id="skill-content" rows="15" placeholder="---
+
+                    <!-- Manual Tab -->
+                    <div id="tab-manual" class="skill-tab-content active">
+                        <div class="form-group">
+                            <label for="skill-name">Name</label>
+                            <input type="text" id="skill-name" placeholder="my-skill">
+                        </div>
+                        <div class="form-group">
+                            <label for="skill-description">Description</label>
+                            <input type="text" id="skill-description" placeholder="Brief description">
+                        </div>
+                        <div class="form-group">
+                            <label for="skill-content">SKILL.md Content</label>
+                            <textarea id="skill-content" rows="15" placeholder="---
 name: my-skill
 description: Brief description
 ---
@@ -68,11 +77,70 @@ description: Brief description
 
 ## When to Use
 ..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Natural Language Tab -->
+                    <div id="tab-natural-language" class="skill-tab-content">
+                        <div class="form-group">
+                            <label for="nl-skill-name">Name</label>
+                            <input type="text" id="nl-skill-name" placeholder="my-skill">
+                        </div>
+                        <div class="form-group">
+                            <label for="nl-skill-goal">Goal</label>
+                            <input type="text" id="nl-skill-goal" placeholder="What should this skill accomplish?">
+                        </div>
+                        <div class="form-group">
+                            <label for="nl-skill-steps">Steps (describe in natural language)</label>
+                            <textarea id="nl-skill-steps" rows="8" placeholder="1. First, do this...
+2. Then, do that...
+3. Finally, complete by..."></textarea>
+                        </div>
+                        <button id="generate-skill-btn" class="btn-secondary">Generate SKILL.md</button>
+                    </div>
+
+                    <!-- Record Browser Tab -->
+                    <div id="tab-record-browser" class="skill-tab-content">
+                        <div class="form-group">
+                            <label for="rec-skill-name">Name</label>
+                            <input type="text" id="rec-skill-name" placeholder="my-browser-skill">
+                        </div>
+                        <div class="form-group">
+                            <label for="rec-skill-description">Description</label>
+                            <input type="text" id="rec-skill-description" placeholder="What does this browser workflow do?">
+                        </div>
+                        <div class="form-group">
+                            <label for="rec-start-url">Start URL</label>
+                            <input type="text" id="rec-start-url" placeholder="https://example.com">
+                        </div>
+                        <div class="recording-controls">
+                            <button id="start-recording-btn" class="btn-primary">Start Recording</button>
+                            <button id="stop-recording-btn" class="btn-danger" disabled>Stop Recording</button>
+                        </div>
+                        <div id="recording-status" class="recording-status"></div>
+                        <div id="recorded-actions" class="recorded-actions"></div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn-secondary modal-cancel">Cancel</button>
+                    <button id="test-skill-btn" class="btn-secondary" style="display:none;">Test Skill</button>
                     <button id="save-skill-btn" class="btn-primary">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Result Modal -->
+        <div id="test-result-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Test Result</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="test-result-content"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-primary modal-close-btn">Close</button>
                 </div>
             </div>
         </div>
@@ -95,6 +163,7 @@ description: Brief description
     </div>
 
     <script src="/static/js/chat.js"></script>
+    <script src="/static/js/recording.js"></script>
     <script src="/static/js/skills.js"></script>
     <script src="/static/js/app.js"></script>
 </body>

@@ -460,3 +460,180 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--dim);
 }
+
+/* Modal Large */
+.modal-large {
+    max-width: 800px;
+}
+
+/* Skill Tabs */
+.skill-tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+}
+
+.skill-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-radius: 0.25rem 0.25rem 0 0;
+    transition: all 0.2s;
+}
+
+.skill-tab:hover {
+    background: var(--bg-light);
+    color: var(--text);
+}
+
+.skill-tab.active {
+    background: var(--primary);
+    color: white;
+}
+
+.skill-tab-content {
+    display: none;
+}
+
+.skill-tab-content.active {
+    display: block;
+}
+
+/* Skill Card Header */
+.skill-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.skill-card-header h4 {
+    margin-bottom: 0;
+}
+
+/* Small Buttons */
+.btn-small {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+}
+
+.btn-test {
+    background: var(--bg-darker);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+}
+
+.btn-test:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* Recording Controls */
+.recording-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.recording-status {
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.recording-status.recording {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--primary);
+    border: 1px solid var(--primary);
+}
+
+.recording-status.stopped {
+    background: rgba(107, 114, 128, 0.1);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+}
+
+.recording-status.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+
+/* Recorded Actions */
+.recorded-actions {
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--bg-darker);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+}
+
+.recorded-action {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-family: 'Fira Code', monospace;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+}
+
+.recorded-action:last-child {
+    border-bottom: none;
+}
+
+/* Test Results */
+.test-result {
+    padding: 1rem;
+    border-radius: 0.5rem;
+}
+
+.test-result h4 {
+    margin-bottom: 0.5rem;
+}
+
+.test-result.test-success {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid var(--primary);
+}
+
+.test-result.test-success .test-status {
+    color: var(--primary);
+    font-weight: bold;
+}
+
+.test-result.test-failure {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--danger);
+}
+
+.test-result.test-failure .test-status {
+    color: var(--danger);
+    font-weight: bold;
+}
+
+.test-duration {
+    color: var(--text-dim);
+    font-size: 0.875rem;
+}
+
+.test-output {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg-darker);
+    border-radius: 0.25rem;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.875rem;
+}
+
+.test-error {
+    margin-top: 0.5rem;
+    color: var(--danger);
+    font-family: 'Fira Code', monospace;
+    font-size: 0.875rem;
+}

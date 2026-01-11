@@ -43,6 +43,8 @@ class ShellMiddleware(AgentMiddleware[AgentState, Any]):
         self._max_output_bytes = max_output_bytes
         self._tool_name = "shell"
         self._env = env if env is not None else os.environ.copy()
+        # Ensure UTF-8 encoding for Python subprocesses
+        self._env["PYTHONIOENCODING"] = "utf-8"
         self._workspace_root = workspace_root
 
         # Build description with working directory information
@@ -98,6 +100,8 @@ class ShellMiddleware(AgentMiddleware[AgentState, Any]):
                 timeout=self._timeout,
                 env=self._env,
                 cwd=self._workspace_root,
+                encoding="utf-8",
+                errors="replace",
             )
 
             # Combine stdout and stderr

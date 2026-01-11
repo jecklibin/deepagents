@@ -159,7 +159,11 @@ deepagents skills create my-skill
 - [libs/deepagents-web/deepagents_web/main.py](libs/deepagents-web/deepagents_web/main.py) - FastAPI app entry point
 - [libs/deepagents-web/deepagents_web/api/chat.py](libs/deepagents-web/deepagents_web/api/chat.py) - WebSocket endpoint for real-time chat
 - [libs/deepagents-web/deepagents_web/api/skills.py](libs/deepagents-web/deepagents_web/api/skills.py) - REST endpoints for skill CRUD
+- [libs/deepagents-web/deepagents_web/api/recording.py](libs/deepagents-web/deepagents_web/api/recording.py) - Browser recording endpoints
 - [libs/deepagents-web/deepagents_web/services/agent_service.py](libs/deepagents-web/deepagents_web/services/agent_service.py) - Agent session management and streaming
+- [libs/deepagents-web/deepagents_web/services/skill_service.py](libs/deepagents-web/deepagents_web/services/skill_service.py) - Skill CRUD and browser skill generation
+- [libs/deepagents-web/deepagents_web/services/recording_service.py](libs/deepagents-web/deepagents_web/services/recording_service.py) - Playwright-based browser recording
+- [libs/deepagents-web/deepagents_web/services/skill_executor.py](libs/deepagents-web/deepagents_web/services/skill_executor.py) - Browser skill execution
 - [libs/deepagents-web/deepagents_web/static/](libs/deepagents-web/deepagents_web/static/) - Frontend HTML/CSS/JS
 
 ### Data Flow
@@ -313,6 +317,38 @@ Step-by-step workflow...
 4. Agent reads full SKILL.md with `read_file` when task matches description
 5. Agent follows step-by-step instructions in skill file
 
+### Browser Skills (Recording-based)
+
+Browser skills automate web interactions using Playwright. They can be created by recording browser actions in the web UI.
+
+**Structure**:
+```
+skills/{skill-name}/
+├── SKILL.md      # Skill documentation with frontmatter type: browser
+└── script.py     # Executable Playwright automation script
+```
+
+**Recording Flow**:
+1. User starts recording in web UI, specifying start URL
+2. Browser window opens with JavaScript injection to capture user interactions
+3. Clicks, inputs, navigation are recorded with coordinates and selectors
+4. User stops recording, actions are converted to human-readable description
+5. LLM generates intelligent Playwright script from the recorded actions
+6. Script includes proper waits, error handling, and page content extraction
+
+**Key Files**:
+- `recording_service.py` - Playwright-based recording with JS injection
+- `skill_service.py` - LLM-powered script generation from recordings
+- `skill_executor.py` - Script execution with UTF-8 output handling
+
+**Generated Script Features**:
+- Uses `headless=False` for visible automation
+- Proper waits after navigation and clicks (`wait_for_load_state`)
+- Robust selectors (text-based, role-based over coordinates)
+- Page content extraction (url, title, content, links, tables, lists)
+- JSON output to stdout with error handling
+- UTF-8 encoding support for Windows
+
 ## Memory System
 
 **agent.md files** are auto-loaded into system prompt:
@@ -326,7 +362,19 @@ Step-by-step workflow...
 
 ## Windows Support
 
-The codebase supports Windows with path normalization in `_validate_path()`. When working on Windows-specific issues, check:
-- Path handling in backends
-- Shell command execution in ShellMiddleware
-- Sandbox integration path conversions
+The codebase supports Windows with several compatibility measures:
+
+**Path Handling**:
+- Virtual filesystem uses Unix-style paths starting with `/`
+- Windows paths like `C:\path` are converted to `/c/path` in `_validate_path()`
+
+**Encoding**:
+- ShellMiddleware sets `PYTHONIOENCODING=utf-8` for subprocess execution
+- subprocess.run uses `encoding="utf-8"` and `errors="replace"`
+- Browser skill scripts use `sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')`
+- skill_executor.py uses Popen with byte-level output and UTF-8 decoding
+
+**Playwright on Windows**:
+- Uses sync API with dedicated worker thread (async subprocess not supported on Windows with uvicorn)
+- Queue-based communication between async FastAPI and sync Playwright
+- Recording service runs Playwright operations in separate thread to avoid event loop conflicts

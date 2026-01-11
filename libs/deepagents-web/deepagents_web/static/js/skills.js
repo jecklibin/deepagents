@@ -6,9 +6,23 @@ class SkillsManager {
     constructor() {
         this.skillsListEl = document.getElementById('skills-list');
         this.modal = document.getElementById('skill-modal');
+        this.testResultModal = document.getElementById('test-result-modal');
         this.editingSkill = null;
+        this.activeTab = 'manual';
+        this.recordingManager = new RecordingManager();
 
         this.setupEventListeners();
+        this.setupTabListeners();
+        this.setupRecordingListeners();
+    }
+
+    // Normalize skill name to valid format (lowercase, hyphens)
+    normalizeName(name) {
+        return name.toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
     }
 
     setupEventListeners() {
@@ -20,12 +34,71 @@ class SkillsManager {
             this.saveSkill();
         });
 
+        document.getElementById('test-skill-btn').addEventListener('click', () => {
+            this.testSkill();
+        });
+
+        document.getElementById('generate-skill-btn').addEventListener('click', () => {
+            this.generateFromNL();
+        });
+
         this.modal.querySelector('.modal-close').addEventListener('click', () => {
             this.closeModal();
         });
 
         this.modal.querySelector('.modal-cancel').addEventListener('click', () => {
             this.closeModal();
+        });
+
+        // Test result modal
+        if (this.testResultModal) {
+            this.testResultModal.querySelector('.modal-close').addEventListener('click', () => {
+                this.testResultModal.classList.add('hidden');
+            });
+            this.testResultModal.querySelector('.modal-close-btn').addEventListener('click', () => {
+                this.testResultModal.classList.add('hidden');
+            });
+        }
+    }
+
+    setupTabListeners() {
+        const tabs = this.modal.querySelectorAll('.skill-tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                this.switchTab(tab.dataset.tab);
+            });
+        });
+    }
+
+    setupRecordingListeners() {
+        document.getElementById('start-recording-btn').addEventListener('click', () => {
+            this.startRecording();
+        });
+
+        document.getElementById('stop-recording-btn').addEventListener('click', () => {
+            this.stopRecording();
+        });
+
+        this.recordingManager.onAction((action) => {
+            this.renderAction(action);
+        });
+
+        this.recordingManager.onStatus((status, data) => {
+            this.updateRecordingStatus(status, data);
+        });
+    }
+
+    switchTab(tabName) {
+        this.activeTab = tabName;
+
+        // Update tab buttons
+        this.modal.querySelectorAll('.skill-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.tab === tabName);
+        });
+
+        // Update tab content
+        this.modal.querySelectorAll('.skill-tab-content').forEach(content => {
+            content.classList.toggle('active', content.id === `tab-${tabName}`);
         });
     }
 
@@ -51,11 +124,22 @@ class SkillsManager {
             const card = document.createElement('div');
             card.className = 'skill-card';
             card.innerHTML = `
-                <h4>${skill.name}</h4>
+                <div class="skill-card-header">
+                    <h4>${skill.name}</h4>
+                    <button class="btn-small btn-test" data-name="${skill.name}">Test</button>
+                </div>
                 <p>${skill.description}</p>
                 <span class="skill-source ${skill.source}">${skill.source}</span>
             `;
-            card.addEventListener('click', () => this.openSkill(skill.name));
+            card.addEventListener('click', (e) => {
+                if (!e.target.classList.contains('btn-test')) {
+                    this.openSkill(skill.name);
+                }
+            });
+            card.querySelector('.btn-test').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.testSkillByName(skill.name);
+            });
             this.skillsListEl.appendChild(card);
         });
     }
@@ -77,6 +161,10 @@ class SkillsManager {
         const nameEl = document.getElementById('skill-name');
         const descEl = document.getElementById('skill-description');
         const contentEl = document.getElementById('skill-content');
+        const testBtn = document.getElementById('test-skill-btn');
+
+        // Reset to manual tab
+        this.switchTab('manual');
 
         if (skill) {
             titleEl.textContent = 'Edit Skill';
@@ -84,12 +172,26 @@ class SkillsManager {
             nameEl.disabled = true;
             descEl.value = skill.description;
             contentEl.value = skill.content || '';
+            testBtn.style.display = 'inline-block';
         } else {
             titleEl.textContent = 'Create Skill';
             nameEl.value = '';
             nameEl.disabled = false;
             descEl.value = '';
             contentEl.value = '';
+            testBtn.style.display = 'none';
+
+            // Clear NL fields
+            document.getElementById('nl-skill-name').value = '';
+            document.getElementById('nl-skill-goal').value = '';
+            document.getElementById('nl-skill-steps').value = '';
+
+            // Clear recording fields
+            document.getElementById('rec-skill-name').value = '';
+            document.getElementById('rec-skill-description').value = '';
+            document.getElementById('rec-start-url').value = '';
+            document.getElementById('recorded-actions').innerHTML = '';
+            document.getElementById('recording-status').textContent = '';
         }
 
         this.modal.classList.remove('hidden');
@@ -98,9 +200,20 @@ class SkillsManager {
     closeModal() {
         this.modal.classList.add('hidden');
         this.editingSkill = null;
+        this.recordingManager.disconnect();
     }
 
     async saveSkill() {
+        if (this.activeTab === 'natural-language') {
+            await this.saveFromNL();
+        } else if (this.activeTab === 'record-browser') {
+            await this.saveFromRecording();
+        } else {
+            await this.saveManual();
+        }
+    }
+
+    async saveManual() {
         const name = document.getElementById('skill-name').value.trim();
         const description = document.getElementById('skill-description').value.trim();
         const content = document.getElementById('skill-content').value;
@@ -113,14 +226,12 @@ class SkillsManager {
         try {
             let response;
             if (this.editingSkill) {
-                // Update existing skill
                 response = await fetch(`/api/skills/${name}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ description, content })
                 });
             } else {
-                // Create new skill
                 response = await fetch('/api/skills', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -138,6 +249,200 @@ class SkillsManager {
         } catch (error) {
             alert(error.message);
         }
+    }
+
+    async generateFromNL() {
+        const name = document.getElementById('nl-skill-name').value.trim();
+        const goal = document.getElementById('nl-skill-goal').value.trim();
+        const steps = document.getElementById('nl-skill-steps').value.trim();
+
+        if (!name || !goal || !steps) {
+            alert('Name, goal, and steps are required');
+            return;
+        }
+
+        const btn = document.getElementById('generate-skill-btn');
+        btn.disabled = true;
+        btn.textContent = 'Generating...';
+
+        try {
+            const response = await fetch('/api/skills/from-nl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, goal, steps })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to generate skill');
+            }
+
+            this.closeModal();
+            this.loadSkills();
+        } catch (error) {
+            alert(error.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Generate SKILL.md';
+        }
+    }
+
+    async saveFromNL() {
+        await this.generateFromNL();
+    }
+
+    async saveFromRecording() {
+        const rawName = document.getElementById('rec-skill-name').value.trim();
+        const name = this.normalizeName(rawName);
+        const description = document.getElementById('rec-skill-description').value.trim();
+        const sessionId = this.recordingManager.getSessionId();
+
+        if (!name || !description) {
+            alert('Name and description are required');
+            return;
+        }
+
+        if (!sessionId) {
+            alert('No recording session. Please record browser actions first.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/skills/from-recording', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, description, session_id: sessionId })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                const detail = error.detail;
+                if (Array.isArray(detail)) {
+                    throw new Error(detail.map(e => e.msg).join(', '));
+                }
+                throw new Error(detail || 'Failed to create skill from recording');
+            }
+
+            this.closeModal();
+            this.loadSkills();
+        } catch (error) {
+            alert(error.message);
+        }
+    }
+
+    async startRecording() {
+        const startUrl = document.getElementById('rec-start-url').value.trim() || 'about:blank';
+
+        document.getElementById('start-recording-btn').disabled = true;
+        document.getElementById('stop-recording-btn').disabled = false;
+        document.getElementById('recorded-actions').innerHTML = '';
+        document.getElementById('recording-status').textContent = 'Starting...';
+
+        try {
+            await this.recordingManager.startRecording(startUrl);
+        } catch (error) {
+            alert('Failed to start recording: ' + error.message);
+            document.getElementById('start-recording-btn').disabled = false;
+            document.getElementById('stop-recording-btn').disabled = true;
+        }
+    }
+
+    async stopRecording() {
+        document.getElementById('recording-status').textContent = 'Stopping...';
+
+        try {
+            await this.recordingManager.stopRecording();
+            document.getElementById('start-recording-btn').disabled = false;
+            document.getElementById('stop-recording-btn').disabled = true;
+        } catch (error) {
+            alert('Failed to stop recording: ' + error.message);
+        }
+    }
+
+    updateRecordingStatus(status, data) {
+        const statusEl = document.getElementById('recording-status');
+
+        if (status === 'recording') {
+            statusEl.textContent = 'Recording... Perform actions in the browser window.';
+            statusEl.className = 'recording-status recording';
+        } else if (status === 'stopped') {
+            statusEl.textContent = `Recording stopped. ${data.actions?.length || 0} actions captured.`;
+            statusEl.className = 'recording-status stopped';
+            document.getElementById('start-recording-btn').disabled = false;
+            document.getElementById('stop-recording-btn').disabled = true;
+
+            // Render all actions
+            if (data.actions) {
+                document.getElementById('recorded-actions').innerHTML = '';
+                data.actions.forEach(action => this.renderAction(action));
+            }
+        } else if (status === 'error') {
+            statusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
+            statusEl.className = 'recording-status error';
+        } else {
+            statusEl.textContent = '';
+            statusEl.className = 'recording-status';
+        }
+    }
+
+    renderAction(action) {
+        const actionsEl = document.getElementById('recorded-actions');
+        const actionEl = document.createElement('div');
+        actionEl.className = 'recorded-action';
+
+        let description = action.type;
+        if (action.selector) {
+            description += ` on "${action.selector}"`;
+        }
+        if (action.value) {
+            description += `: "${action.value}"`;
+        }
+
+        actionEl.textContent = description;
+        actionsEl.appendChild(actionEl);
+    }
+
+    async testSkill() {
+        if (!this.editingSkill) return;
+        await this.testSkillByName(this.editingSkill.name);
+    }
+
+    async testSkillByName(name) {
+        try {
+            const response = await fetch(`/api/skills/${name}/test`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+
+            const result = await response.json();
+            this.showTestResult(name, result);
+        } catch (error) {
+            this.showTestResult(name, {
+                success: false,
+                error: error.message,
+                duration_ms: 0
+            });
+        }
+    }
+
+    showTestResult(name, result) {
+        const contentEl = document.getElementById('test-result-content');
+
+        const statusClass = result.success ? 'test-success' : 'test-failure';
+        const statusText = result.success ? 'Success' : 'Failed';
+
+        contentEl.innerHTML = `
+            <div class="test-result ${statusClass}">
+                <h4>Skill: ${name}</h4>
+                <p class="test-status">${statusText}</p>
+                <p class="test-duration">Duration: ${result.duration_ms.toFixed(2)}ms</p>
+                ${result.output ? `<p class="test-output">${result.output}</p>` : ''}
+                ${result.error ? `<p class="test-error">${result.error}</p>` : ''}
+            </div>
+        `;
+
+        this.testResultModal.classList.remove('hidden');
     }
 
     async deleteSkill(name) {
