@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 DeepAgents is a LangGraph-based agent framework implementing patterns for long-horizon tasks: planning (todos), computer access (filesystem/shell), and sub-agent delegation. The repository is a monorepo with four packages in `libs/`:
 
 - **deepagents** - Core agent library with middleware system, backends, and subagent support
-- **deepagents-cli** - Interactive CLI with memory, skills, and human-in-the-loop workflows
+- **deepagents-cli** - Interactive CLI with Textual TUI, memory, skills, and human-in-the-loop workflows
 - **deepagents-web** - Web service and frontend with WebSocket chat and skill management
 - **harbor** - Evaluation framework for benchmarking agents
 - **acp** - Agent Client Protocol support (work in progress)
@@ -132,7 +132,7 @@ deepagents skills create my-skill
 
 ### Core Concepts
 
-**Middleware System**: The primary extensibility mechanism. Middleware can inject tools, modify prompts, and hook into the agent lifecycle. Built-in middleware includes TodoList, Filesystem, SubAgent, Summarization, PromptCaching, and HITL.
+**Middleware System**: The primary extensibility mechanism. Middleware can inject tools, modify prompts, and hook into the agent lifecycle. Built-in middleware includes TodoList, Filesystem, SubAgent, Summarization, PromptCaching, HITL, Memory, and Skills.
 
 **Backend Abstraction**: Pluggable storage layer for file operations. Backends include StateBackend (ephemeral), FilesystemBackend (disk), StoreBackend (persistent), CompositeBackend (hybrid routing), and SandboxBackend (remote execution).
 
@@ -145,15 +145,19 @@ deepagents skills create my-skill
 **Core Library**:
 - [libs/deepagents/deepagents/graph.py](libs/deepagents/deepagents/graph.py) - `create_deep_agent()` entry point
 - [libs/deepagents/deepagents/middleware/](libs/deepagents/deepagents/middleware/) - Built-in middleware implementations
+- [libs/deepagents/deepagents/middleware/memory.py](libs/deepagents/deepagents/middleware/memory.py) - MemoryMiddleware for loading AGENTS.md files
+- [libs/deepagents/deepagents/middleware/skills.py](libs/deepagents/deepagents/middleware/skills.py) - SkillsMiddleware for progressive skill disclosure
 - [libs/deepagents/deepagents/backends/](libs/deepagents/deepagents/backends/) - Backend implementations
 - [libs/deepagents/deepagents/subagents.py](libs/deepagents/deepagents/subagents.py) - Subagent types and execution
 
 **CLI**:
 - [libs/deepagents-cli/deepagents_cli/main.py](libs/deepagents-cli/deepagents_cli/main.py) - CLI entry point
 - [libs/deepagents-cli/deepagents_cli/agent.py](libs/deepagents-cli/deepagents_cli/agent.py) - `create_cli_agent()` with CLI-specific middleware
-- [libs/deepagents-cli/deepagents_cli/execution.py](libs/deepagents-cli/deepagents_cli/execution.py) - Agent execution loop with streaming and HITL
-- [libs/deepagents-cli/deepagents_cli/agent_memory.py](libs/deepagents-cli/deepagents_cli/agent_memory.py) - AgentMemoryMiddleware for loading agent.md files
-- [libs/deepagents-cli/deepagents_cli/skills/](libs/deepagents-cli/deepagents_cli/skills/) - Skills system implementation
+- [libs/deepagents-cli/deepagents_cli/app.py](libs/deepagents-cli/deepagents_cli/app.py) - Textual TUI application
+- [libs/deepagents-cli/deepagents_cli/textual_adapter.py](libs/deepagents-cli/deepagents_cli/textual_adapter.py) - Agent execution with Textual UI streaming
+- [libs/deepagents-cli/deepagents_cli/sessions.py](libs/deepagents-cli/deepagents_cli/sessions.py) - Thread persistence with SQLite
+- [libs/deepagents-cli/deepagents_cli/widgets/](libs/deepagents-cli/deepagents_cli/widgets/) - Textual UI widgets (messages, approval, diff, etc.)
+- [libs/deepagents-cli/deepagents_cli/skills/](libs/deepagents-cli/deepagents_cli/skills/) - Skills commands and loading
 
 **Web Service**:
 - [libs/deepagents-web/deepagents_web/main.py](libs/deepagents-web/deepagents_web/main.py) - FastAPI app entry point
@@ -168,16 +172,16 @@ deepagents skills create my-skill
 
 ### Data Flow
 
-1. User input → CLI (`main.py`)
+1. User input → Textual TUI (`app.py`)
 2. `create_cli_agent()` assembles middleware stack
 3. `create_deep_agent()` builds LangGraph StateGraph
-4. Agent execution loop streams responses
+4. `TextualUIAdapter` streams responses to widgets
 5. Middleware intercepts to inject tools and modify prompts
 6. Model generates tool calls
 7. HITL middleware interrupts for approval (if configured)
 8. Tools execute via backend (state/filesystem/sandbox)
 9. Results flow back through middleware
-10. CLI renders output with rich formatting
+10. Textual widgets render output with rich formatting
 
 ### Middleware Stack Order
 
@@ -191,9 +195,9 @@ The order matters because middleware wraps the agent in sequence:
 6. PatchToolCallsMiddleware - Fix interrupted tool calls
 7. HumanInTheLoopMiddleware - Tool approval (optional)
 
-CLI adds:
-- AgentMemoryMiddleware - Loads agent.md files
-- SkillsMiddleware - Progressive skill disclosure
+CLI adds (via SDK middleware):
+- MemoryMiddleware - Loads AGENTS.md files from SDK
+- SkillsMiddleware - Progressive skill disclosure from SDK
 - ShellMiddleware - Local shell execution (local mode only)
 
 ### Backend System
@@ -351,14 +355,36 @@ skills/{skill-name}/
 
 ## Memory System
 
-**agent.md files** are auto-loaded into system prompt:
-- Global: `~/.deepagents/{agent}/agent.md` - Personality and universal preferences
-- Project: `{project-root}/.deepagents/agent.md` - Project-specific context
+**AGENTS.md files** are auto-loaded into system prompt:
+- Global: `~/.deepagents/{agent}/AGENTS.md` - Personality and universal preferences
+- Project: `{project-root}/.deepagents/AGENTS.md` - Project-specific context
 
 **Project memory files** in `.deepagents/` are loaded on-demand:
 - Agent checks for relevant memory files when starting tasks
 - Agent creates/updates memory files to persist project knowledge
 - Examples: `architecture.md`, `api-design.md`, `deployment.md`
+
+## Thread Persistence
+
+The CLI supports persistent conversation threads using SQLite:
+
+**Commands**:
+```bash
+# Resume most recent thread
+deepagents -r
+
+# Resume specific thread
+deepagents -r <thread-id>
+
+# List threads
+deepagents threads list
+deepagents threads list --agent mybot --limit 10
+
+# Delete a thread
+deepagents threads delete <thread-id>
+```
+
+**Storage**: Threads are stored in `~/.deepagents/checkpoints.db` using `langgraph-checkpoint-sqlite`.
 
 ## Windows Support
 

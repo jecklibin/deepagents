@@ -15,6 +15,8 @@ from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.middleware.skills import SkillMetadata
 from deepagents.middleware.skills import _list_skills as list_skills_from_backend
 
+MAX_SKILL_NAME_LENGTH = 64
+
 
 class ExtendedSkillMetadata(SkillMetadata):
     """Extended skill metadata for CLI display, adds source tracking."""
@@ -23,7 +25,7 @@ class ExtendedSkillMetadata(SkillMetadata):
 
 
 # Re-export for CLI commands
-__all__ = ["SkillMetadata", "list_skills"]
+__all__ = ["MAX_SKILL_NAME_LENGTH", "SkillMetadata", "list_skills"]
 
 
 def list_skills(
