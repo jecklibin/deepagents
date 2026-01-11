@@ -216,3 +216,9 @@ __marimo__/
 
 #vscode
 .vscode/
+
+TEXTUAL_REFACTOR_PLAN.md
+libs/deepagents-cli/TEXTUAL_PROGRESS.md
+
+/tmp/
+*/tmp/
