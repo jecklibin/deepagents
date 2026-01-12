@@ -10,14 +10,19 @@ class ChatManager {
         this.todoListEl = document.getElementById('todo-list');
         this.inputEl = document.getElementById('user-input');
         this.sendBtn = document.getElementById('send-btn');
+        this.stopBtn = document.getElementById('stop-btn');
+        this.progressEl = document.getElementById('chat-progress');
+        this.progressTextEl = document.getElementById('progress-text');
         this.currentAssistantMessage = null;
         this.pendingInterrupt = null;
+        this.isProcessing = false;
 
         this.setupEventListeners();
     }
 
     setupEventListeners() {
         this.sendBtn.addEventListener('click', () => this.sendMessage());
+        this.stopBtn.addEventListener('click', () => this.stopProcessing());
         this.inputEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -75,9 +80,11 @@ class ChatManager {
                 break;
             case 'text':
                 this.appendText(msg.data);
+                this.updateProgress('Processing...');
                 break;
             case 'tool_call':
                 this.showToolCall(msg.data);
+                this.updateProgress(`Running: ${msg.data.name}`);
                 break;
             case 'interrupt':
                 this.showInterrupt(msg.data);
@@ -85,8 +92,12 @@ class ChatManager {
             case 'todo':
                 this.updateTodoList(msg.data);
                 break;
+            case 'progress':
+                this.updateProgress(msg.data);
+                break;
             case 'error':
                 this.showError(msg.data);
+                this.setProcessing(false);
                 break;
             case 'done':
                 this.finishMessage();
@@ -107,10 +118,36 @@ class ChatManager {
             content: content
         }));
 
-        // Clear input
+        // Clear input and show processing state
         this.inputEl.value = '';
         this.inputEl.style.height = 'auto';
-        this.sendBtn.disabled = true;
+        this.setProcessing(true);
+    }
+
+    stopProcessing() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+        this.ws.send(JSON.stringify({
+            type: 'stop'
+        }));
+
+        this.updateProgress('Stopping...');
+    }
+
+    setProcessing(processing) {
+        this.isProcessing = processing;
+        this.sendBtn.disabled = processing;
+        this.stopBtn.classList.toggle('hidden', !processing);
+        this.progressEl.classList.toggle('hidden', !processing);
+        if (processing) {
+            this.progressTextEl.textContent = 'Processing...';
+        }
+    }
+
+    updateProgress(text) {
+        if (this.progressTextEl) {
+            this.progressTextEl.textContent = text;
+        }
     }
 
     addMessage(role, content) {
@@ -148,6 +185,7 @@ class ChatManager {
             <pre>${JSON.stringify(data.args, null, 2)}</pre>
         `;
         document.getElementById('interrupt-modal').classList.remove('hidden');
+        this.updateProgress(`Waiting for approval: ${data.tool_name}`);
     }
 
     handleInterruptDecision(decision) {
@@ -163,6 +201,14 @@ class ChatManager {
 
         document.getElementById('interrupt-modal').classList.add('hidden');
         this.pendingInterrupt = null;
+
+        // Keep processing state active after approval
+        if (decision === 'approve') {
+            this.setProcessing(true);
+            this.updateProgress('Resuming...');
+        } else {
+            this.setProcessing(false);
+        }
     }
 
     updateTodoList(todos) {
@@ -199,7 +245,7 @@ class ChatManager {
             this.currentAssistantMessage.innerHTML = this.renderMarkdown(text);
         }
         this.currentAssistantMessage = null;
-        this.sendBtn.disabled = false;
+        this.setProcessing(false);
     }
 
     renderMarkdown(text) {

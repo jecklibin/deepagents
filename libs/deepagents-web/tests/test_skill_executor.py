@@ -22,10 +22,11 @@ def test_is_browser_skill_with_type(executor):
     skill = SkillResponse(
         name="test-browser-skill",
         description="A browser skill",
+        path="/test/path/SKILL.md",
         source="user",
         content="---\nname: test\ntype: browser\n---\n# Test",
     )
-    assert executor._is_browser_skill(skill) is True
+    assert executor._is_browser_skill(skill.content) is True
 
 
 def test_is_browser_skill_without_type(executor):
@@ -33,10 +34,11 @@ def test_is_browser_skill_without_type(executor):
     skill = SkillResponse(
         name="test-manual-skill",
         description="A manual skill",
+        path="/test/path/SKILL.md",
         source="user",
         content="---\nname: test\ndescription: test\n---\n# Test",
     )
-    assert executor._is_browser_skill(skill) is False
+    assert executor._is_browser_skill(skill.content) is False
 
 
 def test_is_browser_skill_no_content(executor):
@@ -44,10 +46,11 @@ def test_is_browser_skill_no_content(executor):
     skill = SkillResponse(
         name="test-skill",
         description="A skill",
+        path="/test/path/SKILL.md",
         source="user",
         content=None,
     )
-    assert executor._is_browser_skill(skill) is False
+    assert executor._is_browser_skill(skill.content) is False
 
 
 @pytest.mark.asyncio
@@ -56,6 +59,7 @@ async def test_execute_manual_skill(executor):
     skill = SkillResponse(
         name="test-manual",
         description="A manual skill",
+        path="/test/path/SKILL.md",
         source="user",
         content="---\nname: test-manual\ndescription: A manual skill\n---\n# Test Manual\n\nInstructions here.",
     )
@@ -71,12 +75,13 @@ async def test_execute_skill_no_content(executor):
     skill = SkillResponse(
         name="empty-skill",
         description="Empty skill",
+        path="/test/path/SKILL.md",
         source="user",
         content=None,
     )
     result = await executor.execute_skill(skill)
     assert result.success is False
-    assert "No content" in result.error
+    assert "no content" in result.error.lower()
 
 
 @pytest.mark.asyncio
@@ -85,6 +90,7 @@ async def test_execute_skill_invalid_frontmatter(executor):
     skill = SkillResponse(
         name="bad-skill",
         description="Bad skill",
+        path="/test/path/SKILL.md",
         source="user",
         content="No frontmatter here, just text.",
     )

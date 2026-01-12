@@ -121,7 +121,8 @@ async def create_skill_from_recording(
 
     session = recording_service.get_session(skill.session_id)
     if not session:
-        raise HTTPException(status_code=404, detail=f"Recording session '{skill.session_id}' not found")
+        msg = f"Recording session '{skill.session_id}' not found"
+        raise HTTPException(status_code=404, detail=msg)
 
     try:
         result = await service.create_skill_from_recording(
@@ -130,18 +131,19 @@ async def create_skill_from_recording(
             session=session,
             project=project,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    else:
         # Clean up the session after successful creation
         recording_service.remove_session(skill.session_id)
         return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/{name}/test")
 async def test_skill(
     name: str,
-    request: SkillTestRequest,
-    agent: str = "agent",
+    request: SkillTestRequest,  # noqa: ARG001
+    agent: str = "agent",  # noqa: PT028
 ) -> SkillTestResult:
     """Test a skill by executing it."""
     service = get_skill_service(agent)

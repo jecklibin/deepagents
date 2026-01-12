@@ -39,6 +39,6 @@ class InterruptResponse(BaseModel):
 class UserMessage(BaseModel):
     """User message received from WebSocket."""
 
-    type: Literal["message", "interrupt_response"]
+    type: Literal["message", "interrupt_response", "stop"]
     content: str | None = None
     data: dict[str, Any] | None = None

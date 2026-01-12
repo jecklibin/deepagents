@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -23,6 +25,19 @@ def get_agent_service() -> AgentService:
     if _agent_service is None:
         _agent_service = AgentService(auto_approve=web_settings.auto_approve)
     return _agent_service
+
+
+async def _receive_stop_signal(websocket: WebSocket, session: object) -> None:
+    """Listen for stop signal while streaming."""
+    while True:
+        try:
+            data = await websocket.receive_json()
+            msg = UserMessage(**data)
+            if msg.type == "stop":
+                session.cancel()  # type: ignore[attr-defined]
+                break
+        except Exception:  # noqa: BLE001
+            break
 
 
 @router.websocket("/ws/chat")
@@ -46,14 +61,35 @@ async def websocket_chat(websocket: WebSocket, agent: str = "agent") -> None:  #
             msg = UserMessage(**data)
 
             if msg.type == "message" and msg.content:
-                async for ws_msg in service.stream_response(session, msg.content):
-                    await websocket.send_json(ws_msg.model_dump())
+                # Start listening for stop signal concurrently
+                stop_task = asyncio.create_task(_receive_stop_signal(websocket, session))
+
+                try:
+                    async for ws_msg in service.stream_response(session, msg.content):
+                        await websocket.send_json(ws_msg.model_dump())
+                finally:
+                    stop_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await stop_task
+
                 await websocket.send_json(WebSocketMessage(type="done", data=None).model_dump())
+
+            elif msg.type == "stop":
+                session.cancel()
 
             elif msg.type == "interrupt_response" and msg.data:
                 response = InterruptResponse(**msg.data)
-                async for ws_msg in service.resume_with_decision(session, response):
-                    await websocket.send_json(ws_msg.model_dump())
+                # Start listening for stop signal concurrently
+                stop_task = asyncio.create_task(_receive_stop_signal(websocket, session))
+
+                try:
+                    async for ws_msg in service.resume_with_decision(session, response):
+                        await websocket.send_json(ws_msg.model_dump())
+                finally:
+                    stop_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await stop_task
+
                 await websocket.send_json(WebSocketMessage(type="done", data=None).model_dump())
 
     except WebSocketDisconnect:

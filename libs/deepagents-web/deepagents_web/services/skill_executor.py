@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -23,6 +24,7 @@ class SkillExecutor:
     """Execute skills for testing."""
 
     def __init__(self) -> None:
+        """Initialize the skill executor."""
         self._executor = ThreadPoolExecutor(max_workers=1)
 
     async def execute_skill(self, skill: SkillResponse) -> SkillTestResult:
@@ -33,15 +35,17 @@ class SkillExecutor:
             if skill.content and self._is_browser_skill(skill.content):
                 return await self._execute_browser_skill(skill, start_time)
             return await self._execute_manual_skill(skill, start_time)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return SkillTestResult(
                 success=False,
                 duration_ms=(time.time() - start_time) * 1000,
                 error=str(e),
             )
 
-    def _is_browser_skill(self, content: str) -> bool:
+    def _is_browser_skill(self, content: str | None) -> bool:
         """Check if skill is a browser skill."""
+        if not content:
+            return False
         match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
         if match:
             try:
@@ -51,15 +55,15 @@ class SkillExecutor:
                 pass
         return False
 
-    def _run_script_file(self, script_path: Path) -> dict:
+    def _run_script_file(self, script_path: Path) -> dict[str, Any]:
         """Run script.py file and capture output."""
-        import os
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
 
         # Use Popen for better control over encoding on Windows
-        process = subprocess.Popen(
-            ["python", "-u", str(script_path)],
+        # Security: script_path is validated to be within skill directory
+        process = subprocess.Popen(  # noqa: S603
+            ["python", "-u", str(script_path)],  # noqa: S607
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=script_path.parent,
@@ -70,7 +74,8 @@ class SkillExecutor:
             stdout_bytes, stderr_bytes = process.communicate(timeout=120)
         except subprocess.TimeoutExpired:
             process.kill()
-            raise RuntimeError("Script execution timed out")
+            msg = "Script execution timed out"
+            raise RuntimeError(msg) from None
 
         # Decode with error handling
         stdout = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
@@ -84,7 +89,8 @@ class SkillExecutor:
         # Check for output
         stdout = stdout.strip()
         if not stdout:
-            raise RuntimeError(f"Script produced no output. stderr: {stderr.strip()}")
+            msg = f"Script produced no output. stderr: {stderr.strip()}"
+            raise RuntimeError(msg)
 
         # Parse JSON output
         try:
@@ -116,7 +122,9 @@ class SkillExecutor:
 
         try:
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(self._executor, self._run_script_file, script_path)
+            result = await loop.run_in_executor(
+                self._executor, self._run_script_file, script_path
+            )
 
             # Format the result as readable output
             output = self._format_result(result)
@@ -126,71 +134,29 @@ class SkillExecutor:
                 duration_ms=(time.time() - start_time) * 1000,
                 output=output,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return SkillTestResult(
                 success=False,
                 duration_ms=(time.time() - start_time) * 1000,
                 error=f"Execution failed: {e}",
             )
 
-    def _format_result(self, result: dict) -> str:
+    def _format_result(self, result: dict[str, Any]) -> str:
         """Format result dict as readable output."""
         if not isinstance(result, dict):
             return str(result)
 
-        output_parts = []
+        output_parts: list[str] = []
 
         if result.get("title"):
             output_parts.append(f"Page Title: {result['title']}")
         if result.get("url"):
             output_parts.append(f"URL: {result['url']}")
 
-        # Handle content - could be string, list of strings, or list of dicts
-        content = result.get("content")
-        if content:
-            output_parts.append("\n--- Page Content ---")
-            if isinstance(content, str):
-                output_parts.append(content[:2000])
-            elif isinstance(content, list):
-                for item in content[:5]:
-                    if isinstance(item, dict):
-                        output_parts.append(str(item.get("text", item))[:1000])
-                    else:
-                        output_parts.append(str(item)[:1000])
-
-        # Handle tables
-        tables = result.get("tables")
-        if tables and isinstance(tables, list):
-            output_parts.append("\n--- Tables ---")
-            for i, table in enumerate(tables[:3], 1):
-                output_parts.append(f"\nTable {i}:")
-                if isinstance(table, list):
-                    for row in table[:10]:
-                        if isinstance(row, list):
-                            output_parts.append(" | ".join(str(cell) for cell in row))
-                        else:
-                            output_parts.append(str(row))
-
-        # Handle lists
-        lists = result.get("lists")
-        if lists and isinstance(lists, list):
-            output_parts.append("\n--- Lists ---")
-            for lst in lists[:5]:
-                if isinstance(lst, list):
-                    for item in lst[:10]:
-                        output_parts.append(f"  • {item}")
-                else:
-                    output_parts.append(f"  • {lst}")
-
-        # Handle links
-        links = result.get("links")
-        if links and isinstance(links, list):
-            output_parts.append("\n--- Links ---")
-            for link in links[:10]:
-                if isinstance(link, dict):
-                    output_parts.append(f"  [{link.get('text', '')}]({link.get('href', '')})")
-                else:
-                    output_parts.append(f"  {link}")
+        self._format_content(result, output_parts)
+        self._format_tables(result, output_parts)
+        self._format_lists(result, output_parts)
+        self._format_links(result, output_parts)
 
         # Handle error field
         if result.get("error"):
@@ -200,7 +166,73 @@ class SkillExecutor:
         if result.get("message"):
             output_parts.append(f"\n{result['message']}")
 
-        return "\n".join(output_parts) if output_parts else json.dumps(result, indent=2, ensure_ascii=False)
+        if output_parts:
+            return "\n".join(output_parts)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+
+    def _format_content(
+        self, result: dict[str, Any], output_parts: list[str]
+    ) -> None:
+        """Format content section."""
+        content = result.get("content")
+        if not content:
+            return
+        output_parts.append("\n--- Page Content ---")
+        if isinstance(content, str):
+            output_parts.append(content[:2000])
+        elif isinstance(content, list):
+            for item in content[:5]:
+                if isinstance(item, dict):
+                    output_parts.append(str(item.get("text", item))[:1000])
+                else:
+                    output_parts.append(str(item)[:1000])
+
+    def _format_tables(
+        self, result: dict[str, Any], output_parts: list[str]
+    ) -> None:
+        """Format tables section."""
+        tables = result.get("tables")
+        if not tables or not isinstance(tables, list):
+            return
+        output_parts.append("\n--- Tables ---")
+        for i, table in enumerate(tables[:3], 1):
+            output_parts.append(f"\nTable {i}:")
+            if isinstance(table, list):
+                for row in table[:10]:
+                    if isinstance(row, list):
+                        output_parts.append(" | ".join(str(cell) for cell in row))
+                    else:
+                        output_parts.append(str(row))
+
+    def _format_lists(
+        self, result: dict[str, Any], output_parts: list[str]
+    ) -> None:
+        """Format lists section."""
+        lists = result.get("lists")
+        if not lists or not isinstance(lists, list):
+            return
+        output_parts.append("\n--- Lists ---")
+        for lst in lists[:5]:
+            if isinstance(lst, list):
+                output_parts.extend(f"  • {item}" for item in lst[:10])
+            else:
+                output_parts.append(f"  • {lst}")
+
+    def _format_links(
+        self, result: dict[str, Any], output_parts: list[str]
+    ) -> None:
+        """Format links section."""
+        links = result.get("links")
+        if not links or not isinstance(links, list):
+            return
+        output_parts.append("\n--- Links ---")
+        for link in links[:10]:
+            if isinstance(link, dict):
+                text = link.get("text", "")
+                href = link.get("href", "")
+                output_parts.append(f"  [{text}]({href})")
+            else:
+                output_parts.append(f"  {link}")
 
     async def _execute_manual_skill(
         self, skill: SkillResponse, start_time: float

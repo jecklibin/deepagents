@@ -42,6 +42,15 @@ class AgentSession:
         self.session_state = session_state
         self.config = {"configurable": {"thread_id": session_state.thread_id}}
         self.pending_interrupts: dict[str, dict[str, Any]] = {}
+        self.cancelled = False
+
+    def cancel(self) -> None:
+        """Cancel the current operation."""
+        self.cancelled = True
+
+    def reset_cancel(self) -> None:
+        """Reset the cancel flag."""
+        self.cancelled = False
 
 
 class AgentService:
@@ -124,6 +133,7 @@ class AgentService:
     ) -> AsyncGenerator[WebSocketMessage, None]:
         """Internal method to stream agent responses."""
         tool_call_buffers: dict[str | int, dict[str, Any]] = {}
+        session.reset_cancel()
 
         try:
             async for chunk in session.agent.astream(
@@ -132,6 +142,11 @@ class AgentService:
                 subgraphs=True,
                 config=session.config,
             ):
+                # Check if cancelled
+                if session.cancelled:
+                    yield WebSocketMessage(type="text", data="\n\n[Stopped by user]")
+                    break
+
                 if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_SIZE:
                     continue
 

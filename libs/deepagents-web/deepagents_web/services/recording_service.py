@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import contextlib
 import logging
 import queue
 import threading
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # JavaScript to inject for capturing user interactions
+# fmt: off
 RECORDER_SCRIPT = """
 window.__recordedActions = window.__recordedActions || [];
 window.__recordingStartTime = window.__recordingStartTime || Date.now();
@@ -32,13 +33,13 @@ function getSelector(element) {
         const classes = element.className.trim().split(/\\s+/).filter(c => c).slice(0, 2).join('.');
         if (classes) return element.tagName.toLowerCase() + '.' + classes;
     }
-    // Use nth-child for more specific selection
     const parent = element.parentElement;
     if (parent) {
         const siblings = Array.from(parent.children).filter(e => e.tagName === element.tagName);
         if (siblings.length > 1) {
             const index = siblings.indexOf(element) + 1;
-            return getSelector(parent) + ' > ' + element.tagName.toLowerCase() + ':nth-child(' + index + ')';
+            const tag = element.tagName.toLowerCase();
+            return getSelector(parent) + ' > ' + tag + ':nth-child(' + index + ')';
         }
     }
     return element.tagName.toLowerCase();
@@ -58,7 +59,6 @@ function recordAction(type, element, value, event) {
     console.log('[Recording]', action);
 }
 
-// Capture clicks
 document.addEventListener('click', function(e) {
     const target = e.target;
     if (target.tagName) {
@@ -66,10 +66,10 @@ document.addEventListener('click', function(e) {
     }
 }, true);
 
-// Capture input changes
 document.addEventListener('change', function(e) {
     const target = e.target;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+    if (isInput || target.tagName === 'SELECT') {
         const type = target.type;
         if (type === 'checkbox' || type === 'radio') {
             recordAction(target.checked ? 'check' : 'uncheck', target, null, null);
@@ -81,13 +81,11 @@ document.addEventListener('change', function(e) {
     }
 }, true);
 
-// Capture form submissions
 document.addEventListener('submit', function(e) {
     const target = e.target;
     recordAction('submit', target, null, null);
 }, true);
 
-// Capture keyboard Enter key
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
         recordAction('press', e.target, 'Enter', null);
@@ -96,6 +94,7 @@ document.addEventListener('keydown', function(e) {
 
 console.log('[Recording] Script initialized');
 """
+# fmt: on
 
 
 class RecordingService:
@@ -105,6 +104,7 @@ class RecordingService:
     _lock = threading.Lock()
 
     def __init__(self) -> None:
+        """Initialize the recording service."""
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._sessions: dict[str, dict[str, Any]] = {}
@@ -150,7 +150,7 @@ class RecordingService:
 
                 loop = future.get_loop()
                 loop.call_soon_threadsafe(future.set_result, result)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 loop = future.get_loop()
                 loop.call_soon_threadsafe(future.set_exception, e)
 
@@ -167,10 +167,8 @@ class RecordingService:
         """Inject recording script into page."""
         page.add_init_script(RECORDER_SCRIPT)
         # Also inject into current page if already loaded
-        try:
+        with contextlib.suppress(Exception):
             page.evaluate(RECORDER_SCRIPT)
-        except Exception:
-            pass  # Page might not be ready
 
     def _do_start_recording(self, session_id: str, start_url: str) -> RecordingSession:
         """Start recording (runs in worker thread)."""
@@ -238,7 +236,7 @@ class RecordingService:
                             y=raw.get("y"),
                         )
                     )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning("Failed to collect actions from page: %s", e)
         return actions
 
@@ -325,7 +323,7 @@ class RecordingService:
 
         try:
             await asyncio.wait_for(future, timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._running = False
 
         RecordingService._instance = None

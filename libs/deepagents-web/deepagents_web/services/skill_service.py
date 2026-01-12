@@ -253,17 +253,17 @@ Based on the following recorded browser actions, generate a robust Python script
 2. Launch browser with headless=False so user can see the automation
 3. Add proper waits after each action:
    - After navigation: page.wait_for_load_state('networkidle')
-   - After clicks that may trigger navigation: page.wait_for_load_state('networkidle') or page.wait_for_url()
+   - After clicks that trigger navigation: page.wait_for_load_state('networkidle')
    - After clicks on dynamic elements: page.wait_for_selector() or time.sleep()
 4. Use robust selectors (prefer text-based or role-based selectors over coordinates)
 5. Handle potential timing issues with explicit waits
-6. Extract and return page content at the end as a dict with keys: url, title, content, links, tables, lists
+6. Extract and return page content as a dict with keys: url, title, content, links, tables, lists
 7. Include comprehensive error handling with try/except
 8. The script must be self-contained and executable with `python script.py`
 9. Output result as JSON to stdout
 
 ## CRITICAL: Main block must have try/except
-The if __name__ == "__main__": block MUST wrap everything in try/except and ALWAYS print JSON output:
+The if __name__ == "__main__": block MUST wrap everything in try/except and print JSON:
 
 ```python
 if __name__ == "__main__":
@@ -272,7 +272,8 @@ if __name__ == "__main__":
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except Exception as e:
         import traceback
-        print(json.dumps({{"error": str(e), "traceback": traceback.format_exc()}}, ensure_ascii=False))
+        error_data = {{"error": str(e), "traceback": traceback.format_exc()}}
+        print(json.dumps(error_data, ensure_ascii=False))
 ```
 
 ## Output Format
@@ -288,11 +289,11 @@ Output ONLY the Python code, no markdown code blocks, no explanations.
 
         # Ensure proper encoding header
         if "sys.stdout" not in playwright_code:
-            encoding_header = '''import sys
+            encoding_header = """import sys
 import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-'''
+"""
             playwright_code = encoding_header + playwright_code
 
         # Generate SKILL.md
@@ -343,11 +344,14 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
                 text = action.value.strip() if action.value else ""
                 selector = action.selector or ""
                 if action.x is not None and action.y is not None:
-                    lines.append(f"{i}. Click at coordinates ({action.x}, {action.y}), element: {selector}, text: \"{text}\"")
+                    lines.append(
+                        f'{i}. Click at ({action.x}, {action.y}), '
+                        f'element: {selector}, text: "{text}"'
+                    )
                 else:
-                    lines.append(f"{i}. Click on element: {selector}, text: \"{text}\"")
+                    lines.append(f'{i}. Click on element: {selector}, text: "{text}"')
             elif action.type == ActionType.FILL:
-                lines.append(f"{i}. Fill input {action.selector} with: \"{action.value}\"")
+                lines.append(f'{i}. Fill input {action.selector} with: "{action.value}"')
             elif action.type == ActionType.PRESS:
                 lines.append(f"{i}. Press key {action.value} on {action.selector}")
             elif action.type == ActionType.SELECT:
@@ -365,8 +369,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
             code = code[9:]
         elif code.startswith("```"):
             code = code[3:]
-        if code.endswith("```"):
-            code = code[:-3]
+        code = code.removesuffix("```")
         return code.strip()
 
     def _wrap_with_frontmatter(self, name: str, description: str, content: str) -> str:

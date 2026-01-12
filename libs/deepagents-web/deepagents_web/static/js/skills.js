@@ -126,19 +126,26 @@ class SkillsManager {
             card.innerHTML = `
                 <div class="skill-card-header">
                     <h4>${skill.name}</h4>
-                    <button class="btn-small btn-test" data-name="${skill.name}">Test</button>
+                    <div class="skill-card-actions">
+                        <button class="btn-small btn-test" data-name="${skill.name}">Test</button>
+                        <button class="btn-small btn-delete" data-name="${skill.name}">Delete</button>
+                    </div>
                 </div>
                 <p>${skill.description}</p>
                 <span class="skill-source ${skill.source}">${skill.source}</span>
             `;
             card.addEventListener('click', (e) => {
-                if (!e.target.classList.contains('btn-test')) {
+                if (!e.target.classList.contains('btn-test') && !e.target.classList.contains('btn-delete')) {
                     this.openSkill(skill.name);
                 }
             });
             card.querySelector('.btn-test').addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.testSkillByName(skill.name);
+            });
+            card.querySelector('.btn-delete').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteSkill(skill.name);
             });
             this.skillsListEl.appendChild(card);
         });

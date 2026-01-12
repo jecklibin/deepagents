@@ -14,7 +14,7 @@ def test_action_type_enum():
     assert ActionType.CHECK == "check"
     assert ActionType.UNCHECK == "uncheck"
     assert ActionType.PRESS == "press"
-    assert ActionType.SCROLL == "scroll"
+    assert ActionType.SCREENSHOT == "screenshot"
     assert ActionType.WAIT == "wait"
 
 
