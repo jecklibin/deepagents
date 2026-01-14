@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from deepagents_web.api import chat, recording, sessions, skills
+from deepagents_web.api import browsers, chat, recording, sessions, skills
 from deepagents_web.config import web_settings
 
 app = FastAPI(
@@ -26,6 +26,7 @@ app.add_middleware(
 )
 
 # Include API routers
+app.include_router(browsers.router, prefix="/api")
 app.include_router(skills.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")

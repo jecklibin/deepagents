@@ -7,7 +7,8 @@ import contextlib
 import logging
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
 from deepagents_web.models.recording import RecordedAction, RecordingWebSocketMessage
 from deepagents_web.services.recording_service import RecordingService
@@ -19,6 +20,21 @@ logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[Any]] = set()
 
 
+class PreviewRequest(BaseModel):
+    """Request to preview recorded actions."""
+
+    actions: list[dict[str, Any]]
+    profile_id: str | None = None
+
+
+class PreviewResponse(BaseModel):
+    """Response from preview execution."""
+
+    url: str
+    title: str
+    success: bool
+
+
 async def _handle_start(
     websocket: WebSocket,
     service: RecordingService,
@@ -26,6 +42,7 @@ async def _handle_start(
 ) -> str:
     """Handle start recording message."""
     start_url = data.get("start_url", "about:blank")
+    profile_id = data.get("profile_id")
 
     def on_action(action: RecordedAction) -> None:
         task = asyncio.create_task(
@@ -38,7 +55,9 @@ async def _handle_start(
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
 
-    session = await service.start_recording(start_url=start_url, on_action=on_action)
+    session = await service.start_recording(
+        start_url=start_url, on_action=on_action, profile_id=profile_id
+    )
 
     await websocket.send_json(
         RecordingWebSocketMessage(
@@ -47,6 +66,7 @@ async def _handle_start(
                 "session_id": session.session_id,
                 "status": session.status,
                 "start_url": session.start_url,
+                "profile_id": session.profile_id,
             },
         ).model_dump()
     )
@@ -148,3 +168,22 @@ async def websocket_recording(websocket: WebSocket) -> None:
             await websocket.send_json(
                 RecordingWebSocketMessage(type="error", data=str(e)).model_dump()
             )
+
+
+@router.post("/recording/preview")
+async def preview_actions(request: PreviewRequest) -> PreviewResponse:
+    """Preview recorded actions by replaying them in a browser."""
+    service = await RecordingService.get_instance()
+
+    try:
+        result = await service.preview_actions(
+            actions=request.actions, profile_id=request.profile_id
+        )
+        return PreviewResponse(
+            url=result.get("url", ""),
+            title=result.get("title", ""),
+            success=True,
+        )
+    except Exception as e:
+        logger.exception("Preview failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e

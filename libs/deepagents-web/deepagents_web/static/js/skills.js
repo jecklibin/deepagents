@@ -10,10 +10,13 @@ class SkillsManager {
         this.editingSkill = null;
         this.activeTab = 'manual';
         this.recordingManager = new RecordingManager();
+        this.browserManager = new BrowserManager();
+        this.actionEditor = new ActionEditor('recorded-actions');
 
         this.setupEventListeners();
         this.setupTabListeners();
         this.setupRecordingListeners();
+        this.initBrowserProfiles();
     }
 
     // Normalize skill name to valid format (lowercase, hyphens)
@@ -79,13 +82,34 @@ class SkillsManager {
             this.stopRecording();
         });
 
+        // Preview and export buttons
+        const previewBtn = document.getElementById('preview-recording-btn');
+        if (previewBtn) {
+            previewBtn.addEventListener('click', () => this.previewRecording());
+        }
+
+        const exportMcpBtn = document.getElementById('export-mcp-btn');
+        if (exportMcpBtn) {
+            exportMcpBtn.addEventListener('click', () => this.exportAsMCP());
+        }
+
         this.recordingManager.onAction((action) => {
-            this.renderAction(action);
+            this.actionEditor.addAction(action);
         });
 
         this.recordingManager.onStatus((status, data) => {
             this.updateRecordingStatus(status, data);
         });
+
+        // Listen for action editor changes
+        this.actionEditor.onChange((actions) => {
+            this.recordingManager.actions = actions;
+        });
+    }
+
+    async initBrowserProfiles() {
+        await this.browserManager.loadProfiles();
+        this.browserManager.renderProfileSelector('profile-selector-container');
     }
 
     switchTab(tabName) {
@@ -197,7 +221,7 @@ class SkillsManager {
             document.getElementById('rec-skill-name').value = '';
             document.getElementById('rec-skill-description').value = '';
             document.getElementById('rec-start-url').value = '';
-            document.getElementById('recorded-actions').innerHTML = '';
+            this.actionEditor.setActions([]);
             document.getElementById('recording-status').textContent = '';
         }
 
@@ -339,6 +363,7 @@ class SkillsManager {
 
     async startRecording() {
         const startUrl = document.getElementById('rec-start-url').value.trim() || 'about:blank';
+        const profileId = this.browserManager.getSelectedProfileId();
 
         document.getElementById('start-recording-btn').disabled = true;
         document.getElementById('stop-recording-btn').disabled = false;
@@ -346,7 +371,7 @@ class SkillsManager {
         document.getElementById('recording-status').textContent = 'Starting...';
 
         try {
-            await this.recordingManager.startRecording(startUrl);
+            await this.recordingManager.startRecording(startUrl, profileId);
         } catch (error) {
             alert('Failed to start recording: ' + error.message);
             document.getElementById('start-recording-btn').disabled = false;
@@ -378,10 +403,9 @@ class SkillsManager {
             document.getElementById('start-recording-btn').disabled = false;
             document.getElementById('stop-recording-btn').disabled = true;
 
-            // Render all actions
+            // Load actions into editor
             if (data.actions) {
-                document.getElementById('recorded-actions').innerHTML = '';
-                data.actions.forEach(action => this.renderAction(action));
+                this.actionEditor.setActions(data.actions);
             }
         } else if (status === 'error') {
             statusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
@@ -392,21 +416,88 @@ class SkillsManager {
         }
     }
 
-    renderAction(action) {
-        const actionsEl = document.getElementById('recorded-actions');
-        const actionEl = document.createElement('div');
-        actionEl.className = 'recorded-action';
-
-        let description = action.type;
-        if (action.selector) {
-            description += ` on "${action.selector}"`;
-        }
-        if (action.value) {
-            description += `: "${action.value}"`;
+    async previewRecording() {
+        const actions = this.actionEditor.getActions();
+        if (actions.length === 0) {
+            alert('No actions to preview. Record some actions first.');
+            return;
         }
 
-        actionEl.textContent = description;
-        actionsEl.appendChild(actionEl);
+        const profileId = this.browserManager.getSelectedProfileId();
+
+        try {
+            const response = await fetch('/api/recording/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ actions, profile_id: profileId })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Preview failed');
+            }
+
+            const result = await response.json();
+            alert(`Preview completed!\nURL: ${result.url}\nTitle: ${result.title}`);
+        } catch (error) {
+            alert('Preview failed: ' + error.message);
+        }
+    }
+
+    exportAsMCP() {
+        const actions = this.actionEditor.getActions();
+        if (actions.length === 0) {
+            alert('No actions to export. Record some actions first.');
+            return;
+        }
+
+        const mcpCommands = this.actionEditor.exportAsMCP();
+        const json = JSON.stringify(mcpCommands, null, 2);
+
+        // Show in modal
+        this.showExportModal('MCP Commands', json);
+    }
+
+    showExportModal(title, content) {
+        let modal = document.getElementById('export-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'export-modal';
+            modal.className = 'modal';
+            document.body.appendChild(modal);
+        }
+
+        modal.innerHTML = `
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h3>${title}</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <textarea class="export-content" readonly>${content}</textarea>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" id="copy-export-btn">Copy to Clipboard</button>
+                    <button class="btn-primary modal-close-btn">Close</button>
+                </div>
+            </div>
+        `;
+
+        modal.classList.remove('hidden');
+
+        modal.querySelector('.modal-close').addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+        modal.querySelector('.modal-close-btn').addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+        modal.querySelector('#copy-export-btn').addEventListener('click', () => {
+            navigator.clipboard.writeText(content).then(() => {
+                alert('Copied to clipboard!');
+            });
+        });
     }
 
     async testSkill() {

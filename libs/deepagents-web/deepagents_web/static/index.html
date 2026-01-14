@@ -118,9 +118,12 @@ description: Brief description
                             <label for="rec-start-url">Start URL</label>
                             <input type="text" id="rec-start-url" placeholder="https://example.com">
                         </div>
+                        <div id="profile-selector-container" class="form-group"></div>
                         <div class="recording-controls">
                             <button id="start-recording-btn" class="btn-primary">Start Recording</button>
                             <button id="stop-recording-btn" class="btn-danger" disabled>Stop Recording</button>
+                            <button id="preview-recording-btn" class="btn-secondary">Preview</button>
+                            <button id="export-mcp-btn" class="btn-secondary">Export MCP</button>
                         </div>
                         <div id="recording-status" class="recording-status"></div>
                         <div id="recorded-actions" class="recorded-actions"></div>
@@ -168,7 +171,9 @@ description: Brief description
     </div>
 
     <script src="/static/js/chat.js"></script>
+    <script src="/static/js/browsers.js"></script>
     <script src="/static/js/recording.js"></script>
+    <script src="/static/js/action-editor.js"></script>
     <script src="/static/js/skills.js"></script>
     <script src="/static/js/app.js"></script>
 </body>

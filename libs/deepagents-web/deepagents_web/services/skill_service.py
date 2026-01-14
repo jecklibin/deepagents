@@ -234,10 +234,10 @@ Output only the SKILL.md content, no explanation."""
 
         from deepagents_cli.config import create_model
 
-        # Convert recorded actions to description
+        # Convert recorded actions to description with robust selectors
         actions_desc = self._describe_recorded_actions(session.actions)
 
-        # Use LLM to generate smart Playwright script
+        # Use LLM to generate smart Playwright script with improved prompt
         prompt = f"""You are an expert at writing Playwright browser automation scripts.
 
 Based on the following recorded browser actions, generate a robust Python script using Playwright.
@@ -251,11 +251,17 @@ Based on the following recorded browser actions, generate a robust Python script
 ## Requirements
 1. Use playwright.sync_api with sync_playwright()
 2. Launch browser with headless=False so user can see the automation
-3. Add proper waits after each action:
+3. **CRITICAL: Use Playwright's recommended locator strategies in this priority order:**
+   - page.get_by_role("button", name="Submit") - BEST for buttons, links, headings
+   - page.get_by_text("Click me") - GOOD for text content
+   - page.get_by_label("Email") - GOOD for form inputs with labels
+   - page.get_by_placeholder("Enter email") - GOOD for inputs with placeholders
+   - page.get_by_test_id("submit-btn") - GOOD if data-testid exists
+   - page.locator("css=...") - LAST RESORT only
+4. Add proper waits after each action:
    - After navigation: page.wait_for_load_state('networkidle')
-   - After clicks that trigger navigation: page.wait_for_load_state('networkidle')
-   - After clicks on dynamic elements: page.wait_for_selector() or time.sleep()
-4. Use robust selectors (prefer text-based or role-based selectors over coordinates)
+   - After clicks: page.wait_for_load_state('domcontentloaded')
+   - For dynamic elements: expect(locator).to_be_visible()
 5. Handle potential timing issues with explicit waits
 6. Extract and return page content as a dict with keys: url, title, content, links, tables, lists
 7. Include comprehensive error handling with try/except
@@ -424,3 +430,46 @@ The script will:
 - When you need to automate this specific browser workflow
 - When the user requests this action
 """
+
+    def ai_extract(self, content: str, prompt: str) -> str:
+        """Use LLM to extract information from page content."""
+        import asyncio
+
+        from deepagents_cli.config import create_model
+
+        full_prompt = f"""Extract information from the following web page content.
+
+User Request: {prompt}
+
+Page Content:
+{content}
+
+Respond with ONLY the extracted information, no explanations."""
+
+        model = create_model()
+
+        async def _invoke() -> str:
+            response = await model.ainvoke([{"role": "user", "content": full_prompt}])
+            return response.content if hasattr(response, "content") else str(response)
+
+        return asyncio.get_event_loop().run_until_complete(_invoke())
+
+    def ai_generate(self, prompt: str) -> str:
+        """Use LLM to generate content for form filling."""
+        import asyncio
+
+        from deepagents_cli.config import create_model
+
+        full_prompt = f"""Generate content based on the following request.
+
+Request: {prompt}
+
+Respond with ONLY the generated content, no explanations or formatting."""
+
+        model = create_model()
+
+        async def _invoke() -> str:
+            response = await model.ainvoke([{"role": "user", "content": full_prompt}])
+            return response.content if hasattr(response, "content") else str(response)
+
+        return asyncio.get_event_loop().run_until_complete(_invoke())

@@ -81,12 +81,13 @@ class RecordingManager {
         }
     }
 
-    async startRecording(startUrl) {
+    async startRecording(startUrl, profileId = null) {
         await this.connect();
         this.actions = [];
         this.ws.send(JSON.stringify({
             type: 'start',
-            start_url: startUrl || 'about:blank'
+            start_url: startUrl || 'about:blank',
+            profile_id: profileId
         }));
     }
 

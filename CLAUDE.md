@@ -404,3 +404,6 @@ The codebase supports Windows with several compatibility measures:
 - Uses sync API with dedicated worker thread (async subprocess not supported on Windows with uvicorn)
 - Queue-based communication between async FastAPI and sync Playwright
 - Recording service runs Playwright operations in separate thread to avoid event loop conflicts
+
+## Additional Information
+- This project uses conda to manage the environment, and the environment used is deepagents.
