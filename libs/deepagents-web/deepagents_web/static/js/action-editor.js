@@ -247,8 +247,12 @@ class ActionEditor {
             'hover': '&#x1F5B1;',
             'drag': '&#x2194;',
             'extract': '&#x1F4E5;',
+            'extract_text': '&#x1F4E5;',
+            'extract_html': '&#x1F4C4;',
+            'extract_attribute': '&#x1F4CE;',
             'ai_extract': '&#x1F916;',
-            'ai_fill': '&#x2728;'
+            'ai_fill': '&#x2728;',
+            'execute_js': '&#x2699;'
         };
         return icons[type] || '&#x2022;';
     }
@@ -258,12 +262,20 @@ class ActionEditor {
 
         if (action.type === 'navigate') {
             desc = action.value || '';
-        } else if (action.type === 'extract') {
-            desc = `${action.selector || ''} → ${action.output_key || 'extracted'}`;
+        } else if (action.type === 'extract' || action.type === 'extract_text' || action.type === 'extract_html') {
+            const key = action.variable_name || action.output_key || 'extracted';
+            desc = `${action.selector || action.xpath || ''} -> ${key}`;
+        } else if (action.type === 'extract_attribute') {
+            const key = action.variable_name || action.output_key || 'extracted';
+            const attr = action.attribute_name || 'attribute';
+            desc = `${action.selector || action.xpath || ''} (${attr}) -> ${key}`;
         } else if (action.type === 'ai_extract') {
-            desc = `"${this.truncate(action.prompt || '', 30)}" → ${action.output_key || 'ai_extracted'}`;
+            desc = `"${this.truncate(action.prompt || '', 30)}" -> ${action.output_key || 'ai_extracted'}`;
         } else if (action.type === 'ai_fill') {
-            desc = `${action.selector || ''} ← AI: "${this.truncate(action.prompt || '', 25)}"`;
+            desc = `${action.selector || ''} -> AI: "${this.truncate(action.prompt || '', 25)}"`;
+        } else if (action.type === 'execute_js') {
+            const key = action.variable_name || action.output_key || 'result';
+            desc = `execute_js -> ${key}`;
         } else if (action.selector) {
             desc = `${action.selector}`;
             if (action.value) {
@@ -299,7 +311,10 @@ class ActionEditor {
             document.body.appendChild(modal);
         }
 
-        const isAiAction = ['extract', 'ai_extract', 'ai_fill'].includes(action.type);
+        const promptTypes = ['extract', 'ai_extract', 'ai_fill'];
+        const outputTypes = ['extract', 'ai_extract', 'extract_text', 'extract_html', 'extract_attribute', 'execute_js'];
+        const attributeTypes = ['extract_attribute'];
+        const jsTypes = ['execute_js'];
 
         modal.innerHTML = `
             <div class="modal-content">
@@ -321,8 +336,12 @@ class ActionEditor {
                             <option value="scroll">Scroll</option>
                             <option value="hover">Hover</option>
                             <option value="extract">Extract Data</option>
+                            <option value="extract_text">Extract Text</option>
+                            <option value="extract_html">Extract HTML</option>
+                            <option value="extract_attribute">Extract Attribute</option>
                             <option value="ai_extract">AI Extract</option>
                             <option value="ai_fill">AI Fill</option>
+                            <option value="execute_js">Execute JS</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -333,13 +352,21 @@ class ActionEditor {
                         <label>Value</label>
                         <input type="text" id="edit-action-value" placeholder="Value (URL, text, etc.)">
                     </div>
-                    <div class="form-group" id="prompt-group" style="display:${isAiAction ? 'block' : 'none'}">
+                    <div class="form-group" id="prompt-group" style="display:${promptTypes.includes(action.type) ? 'block' : 'none'}">
                         <label>AI Prompt</label>
                         <textarea id="edit-action-prompt" rows="3" placeholder="Describe what to extract or generate"></textarea>
                     </div>
-                    <div class="form-group" id="output-key-group" style="display:${['extract', 'ai_extract'].includes(action.type) ? 'block' : 'none'}">
+                    <div class="form-group" id="output-key-group" style="display:${outputTypes.includes(action.type) ? 'block' : 'none'}">
                         <label>Output Key</label>
                         <input type="text" id="edit-action-output-key" placeholder="Variable name to store result">
+                    </div>
+                    <div class="form-group" id="attribute-name-group" style="display:${attributeTypes.includes(action.type) ? 'block' : 'none'}">
+                        <label>Attribute Name</label>
+                        <input type="text" id="edit-action-attribute-name" placeholder="Attribute to extract">
+                    </div>
+                    <div class="form-group" id="js-code-group" style="display:${jsTypes.includes(action.type) ? 'block' : 'none'}">
+                        <label>JavaScript Code</label>
+                        <textarea id="edit-action-js-code" rows="6" placeholder="JavaScript to execute"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -354,15 +381,21 @@ class ActionEditor {
         modal.querySelector('#edit-action-selector').value = action.selector || '';
         modal.querySelector('#edit-action-value').value = action.value || '';
         modal.querySelector('#edit-action-prompt').value = action.prompt || '';
-        modal.querySelector('#edit-action-output-key').value = action.output_key || '';
+        modal.querySelector('#edit-action-output-key').value = action.output_key || action.variable_name || '';
+        modal.querySelector('#edit-action-attribute-name').value = action.attribute_name || '';
+        modal.querySelector('#edit-action-js-code').value = action.js_code || '';
 
         // Show/hide AI fields based on type
         modal.querySelector('#edit-action-type').addEventListener('change', (e) => {
             const type = e.target.value;
-            const showPrompt = ['extract', 'ai_extract', 'ai_fill'].includes(type);
-            const showOutputKey = ['extract', 'ai_extract'].includes(type);
+            const showPrompt = promptTypes.includes(type);
+            const showOutputKey = outputTypes.includes(type);
+            const showAttribute = attributeTypes.includes(type);
+            const showJsCode = jsTypes.includes(type);
             modal.querySelector('#prompt-group').style.display = showPrompt ? 'block' : 'none';
             modal.querySelector('#output-key-group').style.display = showOutputKey ? 'block' : 'none';
+            modal.querySelector('#attribute-name-group').style.display = showAttribute ? 'block' : 'none';
+            modal.querySelector('#js-code-group').style.display = showJsCode ? 'block' : 'none';
         });
 
         modal.classList.remove('hidden');
@@ -377,12 +410,16 @@ class ActionEditor {
         });
 
         modal.querySelector('.modal-save').addEventListener('click', () => {
+            const outputKey = modal.querySelector('#edit-action-output-key').value || null;
             const updates = {
                 type: modal.querySelector('#edit-action-type').value,
                 selector: modal.querySelector('#edit-action-selector').value || null,
                 value: modal.querySelector('#edit-action-value').value || null,
                 prompt: modal.querySelector('#edit-action-prompt').value || null,
-                output_key: modal.querySelector('#edit-action-output-key').value || null
+                output_key: outputKey,
+                variable_name: outputKey,
+                attribute_name: modal.querySelector('#edit-action-attribute-name').value || null,
+                js_code: modal.querySelector('#edit-action-js-code').value || null
             };
             this.updateAction(index, updates);
             modal.classList.add('hidden');
@@ -419,6 +456,18 @@ class ActionEditor {
         }
         if (action.output_key) {
             baseCmd.args.output_key = action.output_key;
+        }
+        if (action.variable_name) {
+            baseCmd.args.variable_name = action.variable_name;
+        }
+        if (action.extract_type) {
+            baseCmd.args.extract_type = action.extract_type;
+        }
+        if (action.attribute_name) {
+            baseCmd.args.attribute_name = action.attribute_name;
+        }
+        if (action.js_code) {
+            baseCmd.args.js_code = action.js_code;
         }
 
         return baseCmd;
@@ -517,6 +566,25 @@ if __name__ == "__main__":
                     code = `${key} = page.locator("${action.selector}").first.text_content()\n`;
                 }
                 break;
+            case 'extract_text':
+                if (action.selector) {
+                    const key = action.variable_name || action.output_key || 'extracted_text';
+                    code = `${key} = page.locator("${action.selector}").first.text_content()\n`;
+                }
+                break;
+            case 'extract_html':
+                if (action.selector) {
+                    const key = action.variable_name || action.output_key || 'extracted_html';
+                    code = `${key} = page.locator("${action.selector}").first.inner_html()\n`;
+                }
+                break;
+            case 'extract_attribute':
+                if (action.selector) {
+                    const key = action.variable_name || action.output_key || 'extracted_attribute';
+                    const attr = action.attribute_name || 'href';
+                    code = `${key} = page.locator("${action.selector}").first.get_attribute("${attr}")\n`;
+                }
+                break;
             case 'ai_extract':
                 const aiKey = action.output_key || 'ai_extracted';
                 const prompt = (action.prompt || '').replace(/"/g, '\\"');
@@ -531,6 +599,13 @@ if __name__ == "__main__":
                     code += `${indent}generated = ai_generate("${fillPrompt}")\n`;
                     code += `${indent}page.locator("${action.selector}").fill(generated)\n`;
                 }
+                break;
+            case 'execute_js':
+                const jsVar = action.variable_name || action.output_key || 'result';
+                const jsCode = JSON.stringify(action.js_code || '');
+                code = `# Execute JS\n`;
+                code += `${indent}result = page.evaluate(${jsCode})\n`;
+                code += `${indent}${jsVar} = result\n`;
                 break;
         }
 

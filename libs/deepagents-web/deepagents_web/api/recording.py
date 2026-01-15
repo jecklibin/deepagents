@@ -10,7 +10,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from deepagents_web.models.recording import RecordedAction, RecordingWebSocketMessage
+from deepagents_web.models.recording import (
+    RecordedAction,
+    RecordingSession,
+    RecordingWebSocketMessage,
+)
 from deepagents_web.services.recording_service import RecordingService
 
 router = APIRouter(tags=["recording"])
@@ -55,8 +59,27 @@ async def _handle_start(
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
 
+    def on_status(session: RecordingSession) -> None:
+        task = asyncio.create_task(
+            websocket.send_json(
+                RecordingWebSocketMessage(
+                    type="session",
+                    data={
+                        "session_id": session.session_id,
+                        "status": session.status,
+                        "actions": [a.model_dump() for a in session.actions],
+                    },
+                ).model_dump()
+            )
+        )
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+
     session = await service.start_recording(
-        start_url=start_url, on_action=on_action, profile_id=profile_id
+        start_url=start_url,
+        on_action=on_action,
+        on_status=on_status,
+        profile_id=profile_id,
     )
 
     await websocket.send_json(

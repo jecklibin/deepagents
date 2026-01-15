@@ -25,6 +25,37 @@ class SkillService:
         self.agent_name = agent_name
         self.settings = Settings.from_environment()
 
+    def _truncate(self, text: str, max_len: int = 80) -> str:
+        if len(text) <= max_len:
+            return text
+        return text[: max_len - 3] + "..."
+
+    def _run_coroutine_sync(self, coro: object) -> object:
+        import asyncio
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)  # type: ignore[arg-type]
+
+        import threading
+
+        result: dict[str, object] = {}
+        error: dict[str, Exception] = {}
+
+        def _runner() -> None:
+            try:
+                result["value"] = asyncio.run(coro)  # type: ignore[arg-type]
+            except Exception as exc:  # noqa: BLE001
+                error["error"] = exc
+
+        thread = threading.Thread(target=_runner, daemon=True)
+        thread.start()
+        thread.join()
+        if "error" in error:
+            raise error["error"]
+        return result.get("value")
+
     def list_skills(self, *, project_only: bool = False) -> list[SkillResponse]:
         """List all skills."""
         user_skills_dir = (
@@ -245,28 +276,72 @@ Based on the following recorded browser actions, generate a robust Python script
 ## Task Description
 {description}
 
-## Recorded Actions
-{actions_desc}
+        ## Recorded Actions
+        {actions_desc}
 
-## Requirements
-1. Use playwright.sync_api with sync_playwright()
-2. Launch browser with headless=False so user can see the automation
-3. **CRITICAL: Use Playwright's recommended locator strategies in this priority order:**
+        ## Critical: Use Recorded Locator Hints Exactly
+        For each action, the recorded description may include structured hints like:
+        - `role=...`, `name="..."`, `text="..."`
+        - `css=...`, `xpath=...`
+
+        When these hints are present:
+        - Prefer them over guessing. Do not invent a different `role`/`name`.
+        - Use `role`+`name` (or `text`) as the primary locator when available.
+        - Keep `css`/`xpath` as fallbacks if the primary locator fails.
+
+        ## Critical: Preserve Recorded Data Extraction Steps
+        Some recorded actions are data extraction steps (e.g. `extract_text`, `extract_html`,
+        `extract_attribute`, `execute_js`). The generated Python script MUST implement them
+        (in order) and include their outputs in the final JSON result.
+
+Requirements for data extraction actions:
+- `extract_text`: locate the element, get `.text_content()`, store under the recorded
+  `variable_name`
+- `extract_html`: locate the element, get `.inner_html()`, store under the recorded
+  `variable_name`
+- `extract_attribute`: locate the element, get `.get_attribute(attribute_name)`, store
+  under the recorded `variable_name`
+- `execute_js`: run `page.evaluate(js_code)` and store result under the recorded
+  `variable_name`
+
+Output contract:
+- Add a dict `extracted: dict[str, Any]` in the returned result JSON, containing all
+  extracted variables.
+- Do not drop these steps just because you also return general page content.
+
+        ## Requirements
+        1. Use playwright.sync_api with sync_playwright()
+        2. Launch browser with headless=False so user can see the automation
+        3. **CRITICAL: Use Playwright's recommended locator strategies in this priority order:**
    - page.get_by_role("button", name="Submit") - BEST for buttons, links, headings
    - page.get_by_text("Click me") - GOOD for text content
    - page.get_by_label("Email") - GOOD for form inputs with labels
    - page.get_by_placeholder("Enter email") - GOOD for inputs with placeholders
    - page.get_by_test_id("submit-btn") - GOOD if data-testid exists
    - page.locator("css=...") - LAST RESORT only
-4. Add proper waits after each action:
-   - After navigation: page.wait_for_load_state('networkidle')
-   - After clicks: page.wait_for_load_state('domcontentloaded')
-   - For dynamic elements: expect(locator).to_be_visible()
-5. Handle potential timing issues with explicit waits
-6. Extract and return page content as a dict with keys: url, title, content, links, tables, lists
-7. Include comprehensive error handling with try/except
-8. The script must be self-contained and executable with `python script.py`
-9. Output result as JSON to stdout
+        4. Add proper waits after each action:
+           - After navigation: page.wait_for_load_state('networkidle')
+           - After clicks: page.wait_for_load_state('domcontentloaded')
+           - For dynamic elements: expect(locator).to_be_visible()
+        5. Handle potential timing issues with explicit waits
+        6. Return a minimal JSON result focused on recorded extraction:
+           - Always include `extracted` (dict) with all recorded extracted variables
+           - Include `url` and `title` for debugging/context
+           - Do NOT dump full-page content/links/tables/lists unless explicitly required by the task
+        7. Include comprehensive error handling with try/except
+        8. The script must be self-contained and executable with `python script.py`
+        9. Output result as JSON to stdout
+
+## Result JSON Must Include Extracted Variables
+Include an `extracted` key in the final result:
+
+        ```python
+        result = {{
+            "url": page.url,
+            "title": page.title(),
+            "extracted": extracted,
+        }}
+        ```
 
 ## CRITICAL: Main block must have try/except
 The if __name__ == "__main__": block MUST wrap everything in try/except and print JSON:
@@ -343,30 +418,119 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     def _describe_recorded_actions(self, actions: list[RecordedAction]) -> str:
         """Convert recorded actions to human-readable description."""
         lines = []
+        handlers = {
+            ActionType.NAVIGATE: self._describe_navigate_action,
+            ActionType.CLICK: self._describe_click_action,
+            ActionType.FILL: self._describe_fill_action,
+            ActionType.PRESS: self._describe_press_action,
+            ActionType.SELECT: self._describe_select_action,
+            ActionType.CHECK: self._describe_check_action,
+            ActionType.UNCHECK: self._describe_uncheck_action,
+            ActionType.EXTRACT: self._describe_extract_action,
+            ActionType.EXTRACT_TEXT: self._describe_extract_text_action,
+            ActionType.EXTRACT_HTML: self._describe_extract_html_action,
+            ActionType.EXTRACT_ATTRIBUTE: self._describe_extract_attribute_action,
+            ActionType.AI_EXTRACT: self._describe_ai_extract_action,
+            ActionType.AI_FILL: self._describe_ai_fill_action,
+            ActionType.EXECUTE_JS: self._describe_execute_js_action,
+        }
         for i, action in enumerate(actions, 1):
-            if action.type == ActionType.NAVIGATE:
-                lines.append(f"{i}. Navigate to URL: {action.value}")
-            elif action.type == ActionType.CLICK:
-                text = action.value.strip() if action.value else ""
-                selector = action.selector or ""
-                if action.x is not None and action.y is not None:
-                    lines.append(
-                        f'{i}. Click at ({action.x}, {action.y}), '
-                        f'element: {selector}, text: "{text}"'
-                    )
-                else:
-                    lines.append(f'{i}. Click on element: {selector}, text: "{text}"')
-            elif action.type == ActionType.FILL:
-                lines.append(f'{i}. Fill input {action.selector} with: "{action.value}"')
-            elif action.type == ActionType.PRESS:
-                lines.append(f"{i}. Press key {action.value} on {action.selector}")
-            elif action.type == ActionType.SELECT:
-                lines.append(f"{i}. Select option {action.value} in {action.selector}")
-            elif action.type == ActionType.CHECK:
-                lines.append(f"{i}. Check checkbox: {action.selector}")
-            elif action.type == ActionType.UNCHECK:
-                lines.append(f"{i}. Uncheck checkbox: {action.selector}")
+            handler = handlers.get(action.type)
+            if handler:
+                lines.append(handler(i, action))
         return "\n".join(lines) if lines else "No actions recorded."
+
+    def _describe_navigate_action(self, index: int, action: RecordedAction) -> str:
+        return f"{index}. Navigate to URL: {action.value}"
+
+    def _describe_click_action(self, index: int, action: RecordedAction) -> str:
+        parts: list[str] = []
+
+        if action.selector:
+            parts.append(f"css={action.selector}")
+        if action.xpath:
+            parts.append(f"xpath={action.xpath}")
+
+        if action.accessibility:
+            if action.accessibility.role:
+                parts.append(f"role={action.accessibility.role}")
+            if action.accessibility.name:
+                parts.append(f'name="{action.accessibility.name}"')
+
+        if action.context:
+            if action.context.form_hint:
+                parts.append(f"form_hint={action.context.form_hint}")
+            if action.context.ancestor_tags:
+                ancestors = ">".join(action.context.ancestor_tags[:6])
+                parts.append(f"ancestors={ancestors}")
+            if action.context.nearby_text:
+                nearby = " | ".join(action.context.nearby_text[:3])
+                parts.append(f'nearby="{self._truncate(nearby, 90)}"')
+
+        if action.evidence and action.evidence.confidence is not None:
+            parts.append(f"confidence={action.evidence.confidence:.2f}")
+
+        text = action.value.strip() if action.value else ""
+        if text:
+            parts.append(f'text="{text}"')
+
+        element_desc = ", ".join(parts) if parts else "(unknown)"
+
+        if action.x is not None and action.y is not None:
+            return f"{index}. Click at ({action.x}, {action.y}), element: {element_desc}"
+        return f"{index}. Click on element: {element_desc}"
+
+    def _describe_fill_action(self, index: int, action: RecordedAction) -> str:
+        return f'{index}. Fill input {action.selector} with: "{action.value}"'
+
+    def _describe_press_action(self, index: int, action: RecordedAction) -> str:
+        return f"{index}. Press key {action.value} on {action.selector}"
+
+    def _describe_select_action(self, index: int, action: RecordedAction) -> str:
+        return f"{index}. Select option {action.value} in {action.selector}"
+
+    def _describe_check_action(self, index: int, action: RecordedAction) -> str:
+        return f"{index}. Check checkbox: {action.selector}"
+
+    def _describe_uncheck_action(self, index: int, action: RecordedAction) -> str:
+        return f"{index}. Uncheck checkbox: {action.selector}"
+
+    def _describe_extract_action(self, index: int, action: RecordedAction) -> str:
+        selector = action.selector or action.xpath or ""
+        variable = action.variable_name or action.output_key or "extracted"
+        return f"{index}. Extract data from {selector} into {variable}"
+
+    def _describe_extract_text_action(self, index: int, action: RecordedAction) -> str:
+        selector = action.selector or action.xpath or ""
+        variable = action.variable_name or action.output_key or "extracted_text"
+        return f"{index}. Extract text from {selector} into {variable}"
+
+    def _describe_extract_html_action(self, index: int, action: RecordedAction) -> str:
+        selector = action.selector or action.xpath or ""
+        variable = action.variable_name or action.output_key or "extracted_html"
+        return f"{index}. Extract HTML from {selector} into {variable}"
+
+    def _describe_extract_attribute_action(
+        self, index: int, action: RecordedAction
+    ) -> str:
+        selector = action.selector or action.xpath or ""
+        variable = action.variable_name or action.output_key or "extracted"
+        attr = action.attribute_name or "attribute"
+        return f"{index}. Extract attribute '{attr}' from {selector} into {variable}"
+
+    def _describe_ai_extract_action(self, index: int, action: RecordedAction) -> str:
+        prompt = action.prompt or "AI extraction"
+        output = action.output_key or action.variable_name or "ai_extracted"
+        return f'{index}. AI extract "{prompt}" into {output}'
+
+    def _describe_ai_fill_action(self, index: int, action: RecordedAction) -> str:
+        prompt = action.prompt or "AI fill"
+        selector = action.selector or action.xpath or ""
+        return f'{index}. AI fill {selector} with "{prompt}"'
+
+    def _describe_execute_js_action(self, index: int, action: RecordedAction) -> str:
+        variable = action.variable_name or action.output_key or "result"
+        return f"{index}. Execute JavaScript and store result in {variable}"
 
     def _clean_code_block(self, code: str) -> str:
         """Remove markdown code block wrapper if present."""
@@ -376,6 +540,13 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
         elif code.startswith("```"):
             code = code[3:]
         code = code.removesuffix("```")
+        return code.strip()
+
+    def _extract_code_block(self, code: str) -> str:
+        """Extract a JavaScript code block if present."""
+        match = re.search(r"```(?:javascript|js)?\s*(.*?)```", code, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
         return code.strip()
 
     def _wrap_with_frontmatter(self, name: str, description: str, content: str) -> str:
@@ -431,10 +602,87 @@ The script will:
 - When the user requests this action
 """
 
+    def generate_extraction_js(
+        self,
+        html: str,
+        user_prompt: str = "",
+        description: str = "",
+    ) -> dict[str, str]:
+        """Generate JavaScript to extract data from HTML using an LLM."""
+        from deepagents_cli.config import create_model
+
+        prompt = f"""You are an expert at writing browser extraction JavaScript.
+
+{description or "Generate JavaScript that extracts structured data from the provided HTML."}
+
+HTML:
+{html[:15000]}
+
+{f"User requirements: {user_prompt}" if user_prompt else ""}
+
+Requirements:
+- Return an IIFE that returns a JSON-serializable object
+- Extract meaningful text, links, images, tables, and lists when present
+- Handle missing elements gracefully
+- Avoid external dependencies
+
+Output only JavaScript, no markdown."""
+
+        model = create_model()
+
+        async def _invoke() -> str:
+            response = await model.ainvoke([{"role": "user", "content": prompt}])
+            return response.content if hasattr(response, "content") else str(response)
+
+        js_response = self._run_coroutine_sync(_invoke())
+        js_response = js_response if isinstance(js_response, str) else str(js_response)
+        js_code = self._extract_code_block(js_response)
+        model_name = getattr(model, "model_name", "") or getattr(model, "model", "")
+
+        return {"javascript": js_code, "used_model": str(model_name)}
+
+    def generate_formfill_js(
+        self,
+        html: str,
+        user_prompt: str = "",
+        description: str = "",
+    ) -> dict[str, str]:
+        """Generate JavaScript to fill form fields using an LLM."""
+        from deepagents_cli.config import create_model
+
+        prompt = f"""You are an expert at writing browser form fill JavaScript.
+
+{description or "Generate JavaScript that fills the form with realistic test data."}
+
+HTML:
+{html[:15000]}
+
+{f"User requirements: {user_prompt}" if user_prompt else ""}
+
+Requirements:
+- Return an IIFE that fills visible form fields
+- Trigger input/change events after setting values
+- Use realistic placeholder data (names, emails, addresses)
+- Return a JSON-serializable summary of filled fields
+- Avoid external dependencies
+
+Output only JavaScript, no markdown."""
+
+        model = create_model()
+
+        async def _invoke() -> str:
+            response = await model.ainvoke([{"role": "user", "content": prompt}])
+            return response.content if hasattr(response, "content") else str(response)
+
+        js_response = self._run_coroutine_sync(_invoke())
+        js_response = js_response if isinstance(js_response, str) else str(js_response)
+        js_code = self._extract_code_block(js_response)
+        model_name = getattr(model, "model_name", "") or getattr(model, "model", "")
+
+        return {"javascript": js_code, "used_model": str(model_name)}
+
     def ai_extract(self, content: str, prompt: str) -> str:
         """Use LLM to extract information from page content."""
-        import asyncio
-
         from deepagents_cli.config import create_model
 
         full_prompt = f"""Extract information from the following web page content.
@@ -452,12 +700,11 @@ Respond with ONLY the extracted information, no explanations."""
             response = await model.ainvoke([{"role": "user", "content": full_prompt}])
             return response.content if hasattr(response, "content") else str(response)
 
-        return asyncio.get_event_loop().run_until_complete(_invoke())
+        result = self._run_coroutine_sync(_invoke())
+        return result if isinstance(result, str) else str(result)
 
     def ai_generate(self, prompt: str) -> str:
         """Use LLM to generate content for form filling."""
-        import asyncio
-
         from deepagents_cli.config import create_model
 
         full_prompt = f"""Generate content based on the following request.
@@ -472,4 +719,5 @@ Respond with ONLY the generated content, no explanations or formatting."""
             response = await model.ainvoke([{"role": "user", "content": full_prompt}])
             return response.content if hasattr(response, "content") else str(response)
 
-        return asyncio.get_event_loop().run_until_complete(_invoke())
+        result = self._run_coroutine_sync(_invoke())
+        return result if isinstance(result, str) else str(result)

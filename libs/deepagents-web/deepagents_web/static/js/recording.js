@@ -51,7 +51,7 @@ class RecordingManager {
                 this.sessionId = msg.data.session_id;
                 this.status = msg.data.status;
                 if (msg.data.actions) {
-                    this.actions = msg.data.actions;
+                    this.actions = msg.data.actions.map(action => this.normalizeAction(action));
                 }
                 if (this.onStatusCallback) {
                     this.onStatusCallback(this.status, msg.data);
@@ -59,9 +59,10 @@ class RecordingManager {
                 break;
 
             case 'action':
-                this.actions.push(msg.data);
+                const normalized = this.normalizeAction(msg.data);
+                this.actions.push(normalized);
                 if (this.onActionCallback) {
-                    this.onActionCallback(msg.data);
+                    this.onActionCallback(normalized);
                 }
                 break;
 
@@ -79,6 +80,17 @@ class RecordingManager {
                 }
                 break;
         }
+    }
+
+    normalizeAction(action) {
+        if (!action) return action;
+        if (action.variable_name && !action.output_key) {
+            action.output_key = action.variable_name;
+        }
+        if (action.type === 'execute_js' && !action.js_code) {
+            action.js_code = '';
+        }
+        return action;
     }
 
     async startRecording(startUrl, profileId = null) {

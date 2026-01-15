@@ -7,9 +7,11 @@ import base64
 import contextlib
 import logging
 import queue
+import re
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deepagents_web.models.recording import ActionType, RecordedAction, RecordingSession
@@ -22,259 +24,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# JavaScript to inject for capturing user interactions
-# fmt: off
-RECORDER_SCRIPT = """
-window.__recordedActions = window.__recordedActions || [];
-window.__recordingStartTime = window.__recordingStartTime || Date.now();
-window.__extractMode = false;
-window.__aiExtractMode = false;
-window.__aiFormFillMode = false;
-window.__highlightEl = null;
+POLL_INTERVAL_SECONDS = 0.5
 
-function getSelector(element) {
-    if (element.id) return '#' + element.id;
-    if (element.name) return element.tagName.toLowerCase() + '[name="' + element.name + '"]';
-    if (element.className && typeof element.className === 'string') {
-        const classes = element.className.trim().split(/\\s+/).filter(c => c).slice(0, 2).join('.');
-        if (classes) return element.tagName.toLowerCase() + '.' + classes;
-    }
-    const parent = element.parentElement;
-    if (parent) {
-        const siblings = Array.from(parent.children).filter(e => e.tagName === element.tagName);
-        if (siblings.length > 1) {
-            const index = siblings.indexOf(element) + 1;
-            const tag = element.tagName.toLowerCase();
-            return getSelector(parent) + ' > ' + tag + ':nth-child(' + index + ')';
-        }
-    }
-    return element.tagName.toLowerCase();
-}
-
-function getRobustSelector(element) {
-    const role = element.getAttribute('role') || element.tagName.toLowerCase();
-    const ariaLabel = element.getAttribute('aria-label');
-    const text = element.innerText?.trim().substring(0, 30);
-    const placeholder = element.getAttribute('placeholder');
-    const testId = element.getAttribute('data-testid') || element.getAttribute('data-test-id');
-
-    if (testId) return 'get_by_test_id("' + testId + '")';
-    if (ariaLabel) return 'get_by_role("' + role + '", name="' + ariaLabel + '")';
-    if (element.tagName === 'BUTTON' && text) return 'get_by_role("button", name="' + text + '")';
-    if (element.tagName === 'A' && text) return 'get_by_role("link", name="' + text + '")';
-    if (element.tagName === 'INPUT' && placeholder) return 'get_by_placeholder("' + placeholder + '")';
-    if (text && text.length < 30) return 'get_by_text("' + text + '")';
-    return 'locator("' + getSelector(element) + '")';
-}
-
-function recordAction(type, element, value, event, extra) {
-    const action = {
-        type: type,
-        selector: getSelector(element),
-        robust_selector: getRobustSelector(element),
-        value: value || null,
-        timestamp: (Date.now() - window.__recordingStartTime) / 1000,
-        tagName: element.tagName.toLowerCase(),
-        x: event ? Math.round(event.pageX) : null,
-        y: event ? Math.round(event.pageY) : null,
-        ...(extra || {})
-    };
-    window.__recordedActions.push(action);
-    console.log('[Recording]', action);
-    updateActionCount();
-}
-
-function updateActionCount() {
-    const countEl = document.getElementById('__rec_count__');
-    if (countEl) countEl.textContent = window.__recordedActions.length + ' actions';
-}
-
-function createPanel() {
-    if (document.getElementById('__rec_panel__')) return;
-    const panel = document.createElement('div');
-    panel.id = '__rec_panel__';
-    panel.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-            <div style="width:8px;height:8px;border-radius:50%;background:#ef4444;animation:pulse 2s infinite;"></div>
-            <span style="font-weight:600;color:#1f2937;">Recording</span>
-            <span id="__rec_count__" style="margin-left:auto;color:#6b7280;font-size:12px;">0 actions</span>
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button id="__btn_extract__" class="__rec_btn__">Extract</button>
-            <button id="__btn_ai_extract__" class="__rec_btn__">AI Extract</button>
-            <button id="__btn_ai_fill__" class="__rec_btn__">AI Fill</button>
-        </div>
-        <div id="__rec_status__" style="margin-top:8px;font-size:11px;color:#6b7280;display:none;"></div>
-    `;
-    panel.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,0.15);font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;min-width:200px;';
-
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-        .__rec_btn__{padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;font-weight:500;transition:all 0.2s;}
-        .__rec_btn__:hover{background:#f3f4f6;border-color:#9ca3af;}
-        .__rec_btn__.active{background:#1f2937;color:#fff;border-color:#1f2937;}
-        #__rec_highlight__{position:absolute;pointer-events:none;border:2px solid #3b82f6;border-radius:3px;z-index:2147483646;display:none;transition:all 0.1s;}
-    `;
-    document.head.appendChild(style);
-    document.body.appendChild(panel);
-
-    const highlight = document.createElement('div');
-    highlight.id = '__rec_highlight__';
-    document.body.appendChild(highlight);
-    window.__highlightEl = highlight;
-
-    document.getElementById('__btn_extract__').onclick = () => toggleMode('extract');
-    document.getElementById('__btn_ai_extract__').onclick = () => toggleMode('aiExtract');
-    document.getElementById('__btn_ai_fill__').onclick = () => toggleMode('aiFill');
-
-    makeDraggable(panel);
-}
-
-function makeDraggable(el) {
-    let isDragging = false, startX, startY, origX, origY;
-    el.onmousedown = function(e) {
-        if (e.target.tagName === 'BUTTON') return;
-        isDragging = true;
-        startX = e.clientX; startY = e.clientY;
-        const rect = el.getBoundingClientRect();
-        origX = rect.left; origY = rect.top;
-        e.preventDefault();
-    };
-    document.onmousemove = function(e) {
-        if (!isDragging) return;
-        el.style.left = (origX + e.clientX - startX) + 'px';
-        el.style.top = (origY + e.clientY - startY) + 'px';
-        el.style.right = 'auto';
-    };
-    document.onmouseup = function() { isDragging = false; };
-}
-
-function toggleMode(mode) {
-    const modes = {extract: '__extractMode', aiExtract: '__aiExtractMode', aiFill: '__aiFormFillMode'};
-    const btns = {extract: '__btn_extract__', aiExtract: '__btn_ai_extract__', aiFill: '__btn_ai_fill__'};
-
-    Object.keys(modes).forEach(m => {
-        window[modes[m]] = (m === mode) ? !window[modes[m]] : false;
-        document.getElementById(btns[m]).classList.toggle('active', window[modes[m]]);
-    });
-
-    const anyActive = window.__extractMode || window.__aiExtractMode || window.__aiFormFillMode;
-    document.body.style.cursor = anyActive ? 'crosshair' : 'default';
-    showStatus(anyActive ? 'Click an element to ' + (window.__extractMode ? 'extract data' : window.__aiExtractMode ? 'AI extract' : 'AI fill') : '');
-}
-
-function showStatus(msg) {
-    const el = document.getElementById('__rec_status__');
-    if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
-}
-
-function highlightElement(el) {
-    if (!window.__highlightEl || !el) return;
-    const rect = el.getBoundingClientRect();
-    const h = window.__highlightEl;
-    h.style.display = 'block';
-    h.style.left = (rect.left + window.scrollX - 2) + 'px';
-    h.style.top = (rect.top + window.scrollY - 2) + 'px';
-    h.style.width = (rect.width + 4) + 'px';
-    h.style.height = (rect.height + 4) + 'px';
-}
-
-function hideHighlight() {
-    if (window.__highlightEl) window.__highlightEl.style.display = 'none';
-}
-
-function isRecorderElement(el) {
-    return el && (el.id?.startsWith('__rec') || el.id?.startsWith('__btn') || el.closest('#__rec_panel__'));
-}
-
-document.addEventListener('mouseover', function(e) {
-    if ((window.__extractMode || window.__aiExtractMode || window.__aiFormFillMode) && !isRecorderElement(e.target)) {
-        highlightElement(e.target);
-    }
-}, true);
-
-document.addEventListener('mouseout', function(e) {
-    if (window.__extractMode || window.__aiExtractMode || window.__aiFormFillMode) hideHighlight();
-}, true);
-
-document.addEventListener('click', function(e) {
-    const target = e.target;
-    if (!target.tagName || isRecorderElement(target)) return;
-
-    if (window.__extractMode) {
-        e.preventDefault(); e.stopPropagation();
-        const outputKey = prompt('Variable name for extracted data:', 'data_' + window.__recordedActions.length);
-        if (outputKey) {
-            recordAction('extract', target, target.innerText?.substring(0, 200), e, {output_key: outputKey});
-            showStatus('Recorded extract: ' + outputKey);
-        }
-        toggleMode('extract');
-        return false;
-    }
-
-    if (window.__aiExtractMode) {
-        e.preventDefault(); e.stopPropagation();
-        const prompt_text = prompt('What data to extract?', 'Extract the main content');
-        if (prompt_text) {
-            const outputKey = 'ai_data_' + window.__recordedActions.length;
-            recordAction('ai_extract', target, null, e, {prompt: prompt_text, output_key: outputKey});
-            showStatus('Recorded AI extract: ' + outputKey);
-        }
-        toggleMode('aiExtract');
-        return false;
-    }
-
-    if (window.__aiFormFillMode) {
-        e.preventDefault(); e.stopPropagation();
-        const prompt_text = prompt('Describe what to fill:', 'Fill with appropriate test data');
-        if (prompt_text) {
-            recordAction('ai_fill', target, null, e, {prompt: prompt_text});
-            showStatus('Recorded AI fill');
-        }
-        toggleMode('aiFill');
-        return false;
-    }
-
-    recordAction('click', target, target.innerText?.substring(0, 50), e);
-}, true);
-
-document.addEventListener('change', function(e) {
-    const target = e.target;
-    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
-    if (isInput || target.tagName === 'SELECT') {
-        const type = target.type;
-        if (type === 'checkbox' || type === 'radio') {
-            recordAction(target.checked ? 'check' : 'uncheck', target, null, null);
-        } else if (target.tagName === 'SELECT') {
-            recordAction('select', target, target.value, null);
-        } else {
-            recordAction('fill', target, target.value, null);
-        }
-    }
-}, true);
-
-document.addEventListener('submit', function(e) {
-    recordAction('submit', e.target, null, null);
-}, true);
-
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') recordAction('press', e.target, 'Enter', null);
-}, true);
-
-document.addEventListener('scroll', function(e) {
-    if (!window.__scrollTimeout) {
-        window.__scrollTimeout = setTimeout(function() {
-            recordAction('scroll', document.documentElement, window.scrollY.toString(), null);
-            window.__scrollTimeout = null;
-        }, 500);
-    }
-}, true);
-
-createPanel();
-console.log('[Recording] Enhanced script with floating panel initialized');
-"""
-# fmt: on
+RECORDER_SCRIPT_PATH = Path(__file__).resolve().parent / "scripts" / "recorder.js"
 
 
 class RecordingService:
@@ -293,6 +45,10 @@ class RecordingService:
         self._thread: threading.Thread | None = None
         self._queue: queue.Queue[tuple[str, Any, asyncio.Future[Any]]] = queue.Queue()
         self._running = False
+        self._recorder_script: str | None = None
+        self._recorder_script_mtime: float | None = None
+        self._recorder_script_version: str | None = None
+        self._last_poll = 0.0
         self._browser_service = BrowserService()
 
     @classmethod
@@ -314,8 +70,9 @@ class RecordingService:
 
         while self._running:
             try:
-                op, args, future = self._queue.get(timeout=0.5)
+                op, args, future = self._queue.get(timeout=POLL_INTERVAL_SECONDS)
             except queue.Empty:
+                self._poll_sessions()
                 continue
 
             try:
@@ -336,6 +93,8 @@ class RecordingService:
             except Exception as e:  # noqa: BLE001
                 loop = future.get_loop()
                 loop.call_soon_threadsafe(future.set_exception, e)
+            finally:
+                self._poll_sessions()
 
     def _ensure_thread_started(self) -> None:
         """Ensure the worker thread is running."""
@@ -346,12 +105,347 @@ class RecordingService:
             while not self._initialized:
                 time.sleep(0.1)
 
+    def _load_recorder_script(self) -> str:
+        """Load the injected recorder JavaScript from disk."""
+        if not RECORDER_SCRIPT_PATH.exists():
+            msg = f"Recorder script not found at {RECORDER_SCRIPT_PATH}"
+            raise FileNotFoundError(msg)
+
+        mtime = RECORDER_SCRIPT_PATH.stat().st_mtime
+        if (
+            self._recorder_script is not None
+            and self._recorder_script_mtime is not None
+            and mtime == self._recorder_script_mtime
+        ):
+            return self._recorder_script
+
+        self._recorder_script = RECORDER_SCRIPT_PATH.read_text(encoding="utf-8")
+        self._recorder_script_mtime = mtime
+        self._recorder_script_version = self._extract_recorder_version(self._recorder_script)
+        return self._recorder_script
+
+    def _extract_recorder_version(self, script: str) -> str | None:
+        match = re.search(r'RECORDER_VERSION\\s*=\\s*"([^"]+)"', script)
+        return match.group(1) if match else None
+
     def _inject_recorder(self, page: Page) -> None:
         """Inject recording script into page."""
-        page.add_init_script(RECORDER_SCRIPT)
+        script = self._load_recorder_script()
+        page.add_init_script(script)
         # Also inject into current page if already loaded
         with contextlib.suppress(Exception):
-            page.evaluate(RECORDER_SCRIPT)
+            page.evaluate(script)
+
+    def _ensure_recorder_installed(self, page: Page) -> None:
+        """Best-effort ensure recorder is present (useful for SPA navigations)."""
+        try:
+            state = page.evaluate(
+                "() => ({ installed: !!window.__deepagentsRecorder__, "
+                "version: window.__deepagentsRecorderVersion__ || null, "
+                "initialized: !!window.__deepagentsRecorderInitialized__, "
+                "readyState: (document && document.readyState) ? document.readyState : null, "
+                "panel: !!(document && document.getElementById && "
+                "document.getElementById('__deepagents_recorder_panel__')) })",
+            )
+        except Exception:  # noqa: BLE001
+            return
+
+        if not isinstance(state, dict):
+            return
+        installed = bool(state.get("installed"))
+        version = state.get("version")
+        initialized = bool(state.get("initialized"))
+        ready_state = state.get("readyState")
+        expected_version = self._recorder_script_version or self._extract_recorder_version(
+            self._load_recorder_script()
+        )
+
+        if (
+            installed
+            and expected_version
+            and version == expected_version
+            and (initialized or ready_state == "loading")
+        ):
+            return
+
+        with contextlib.suppress(Exception):
+            page.evaluate(self._load_recorder_script())
+
+    def _poll_sessions(self) -> None:
+        """Poll active sessions for actions and AI requests."""
+        now = time.time()
+        if now - self._last_poll < POLL_INTERVAL_SECONDS:
+            return
+        self._last_poll = now
+
+        if not self._sessions:
+            return
+
+        for session_id, session_data in list(self._sessions.items()):
+            context = session_data.get("context")
+            pages = []
+            if context:
+                pages.extend(context.pages)
+            page = session_data.get("page")
+            if page and page not in pages:
+                pages.append(page)
+
+            if not pages:
+                continue
+
+            if self._check_stop_request(pages):
+                on_status = session_data.get("on_status")
+                session = self._do_stop_recording(session_id)
+                if on_status:
+                    on_status(session)
+                continue
+
+            for pg in pages:
+                self._ensure_recorder_installed(pg)
+                request = self._check_ai_request(pg)
+                if request:
+                    self._handle_ai_request(pg, request)
+
+            self._sync_session_actions(session_data, pages)
+
+    def _check_stop_request(self, pages: list[Page]) -> bool:
+        """Check if any page has requested recording to stop."""
+        for page in pages:
+            try:
+                stop_requested = page.evaluate(
+                    """() => {
+                        if (window.__stopRecordingRequest__) {
+                            delete window.__stopRecordingRequest__;
+                            return true;
+                        }
+                        return false;
+                    }"""
+                )
+                if stop_requested:
+                    return True
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Stop request check failed: %s", exc)
+                continue
+        return False
+
+    def _check_ai_request(self, page: Page) -> dict[str, Any] | None:
+        """Fetch pending AI requests from a page, if any."""
+        try:
+            request = page.evaluate(
+                """() => {
+                    if (window.__aiExtractionRequest__) {
+                        var req = window.__aiExtractionRequest__;
+                        delete window.__aiExtractionRequest__;
+                        return req;
+                    }
+                    return null;
+                }"""
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("AI request polling failed: %s", exc)
+            return None
+
+        if not request:
+            return None
+        if isinstance(request, dict):
+            return request
+        return None
+
+    def _handle_ai_request(self, page: Page, request: dict[str, Any]) -> None:
+        """Process AI extraction/formfill requests and return result to page."""
+        html = request.get("html") or ""
+        if not html:
+            return
+
+        request_type = request.get("type", "extract")
+        description = request.get("description", "")
+        user_prompt = request.get("user_prompt", "")
+
+        from deepagents_web.services.skill_service import SkillService
+
+        skill_service = SkillService()
+
+        try:
+            if request_type == "formfill":
+                result = skill_service.generate_formfill_js(
+                    html=html,
+                    user_prompt=user_prompt,
+                    description=description,
+                )
+                response_data = {
+                    "success": True,
+                    "javascript": result.get("javascript"),
+                    "used_model": result.get("used_model", ""),
+                }
+                page.evaluate(
+                    "(response) => { window.__aiFormFillResponse__ = response; }",
+                    response_data,
+                )
+                return
+
+            result = skill_service.generate_extraction_js(
+                html=html,
+                user_prompt=user_prompt,
+                description=description,
+            )
+            response_data = {
+                "success": True,
+                "javascript": result.get("javascript"),
+                "used_model": result.get("used_model", ""),
+            }
+            page.evaluate(
+                "(response) => { window.__aiExtractionResponse__ = response; }",
+                response_data,
+            )
+        except Exception as exc:  # noqa: BLE001
+            response_data = {"success": False, "error": str(exc)}
+            if request_type == "formfill":
+                target_var = "__aiFormFillResponse__"
+            else:
+                target_var = "__aiExtractionResponse__"
+            page.evaluate(
+                "(response) => { window." + target_var + " = response; }",
+                response_data,
+            )
+
+    def _collect_raw_actions(self, page: Page) -> list[dict[str, Any]]:
+        """Collect raw action data from a page."""
+        try:
+            raw_actions = page.evaluate(
+                """() => {
+                    try {
+                        var saved = sessionStorage.getItem('__deepagents_actions__');
+                        if (saved) {
+                            return JSON.parse(saved);
+                        }
+                    } catch (e) {}
+                    return window.__recordedActions__ || [];
+                }"""
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to read actions from page: %s", exc)
+            return []
+
+        if isinstance(raw_actions, list):
+            return raw_actions
+        return []
+
+    def _normalize_action(self, raw: dict[str, Any]) -> RecordedAction | None:
+        """Convert raw JS action to RecordedAction."""
+        action_type = raw.get("type", "")
+        type_map = {
+            "click": ActionType.CLICK,
+            "fill": ActionType.FILL,
+            "select": ActionType.SELECT,
+            "check": ActionType.CHECK,
+            "uncheck": ActionType.UNCHECK,
+            "press": ActionType.PRESS,
+            "submit": ActionType.CLICK,
+            "scroll": ActionType.SCROLL,
+            "hover": ActionType.HOVER,
+            "extract": ActionType.EXTRACT,
+            "extract_text": ActionType.EXTRACT_TEXT,
+            "extract_html": ActionType.EXTRACT_HTML,
+            "extract_attribute": ActionType.EXTRACT_ATTRIBUTE,
+            "ai_extract": ActionType.AI_EXTRACT,
+            "ai_fill": ActionType.AI_FILL,
+            "execute_js": ActionType.EXECUTE_JS,
+        }
+        if action_type not in type_map:
+            return None
+
+        timestamp = raw.get("timestamp", 0)
+        try:
+            timestamp = float(timestamp)
+        except (TypeError, ValueError):
+            timestamp = 0.0
+
+        return RecordedAction(
+            type=type_map[action_type],
+            selector=raw.get("selector"),
+            xpath=raw.get("xpath"),
+            value=raw.get("value"),
+            timestamp=timestamp,
+            x=raw.get("x"),
+            y=raw.get("y"),
+            robust_selector=raw.get("robust_selector"),
+            tag_name=raw.get("tag_name") or raw.get("tagName"),
+            text=raw.get("text"),
+            prompt=raw.get("prompt"),
+            output_key=raw.get("output_key") or raw.get("variable_name"),
+            extract_type=raw.get("extract_type"),
+            variable_name=raw.get("variable_name"),
+            attribute_name=raw.get("attribute_name"),
+            js_code=raw.get("js_code"),
+            intent=raw.get("intent"),
+            accessibility=raw.get("accessibility"),
+            context=raw.get("context"),
+            evidence=raw.get("evidence"),
+        )
+
+    def _sync_session_actions(self, session_data: dict[str, Any], pages: list[Page]) -> None:
+        """Sync recorded actions from all pages and stream new actions."""
+        session = session_data["session"]
+        start_url = session.start_url
+        initial_actions: list[RecordedAction] = session_data.get("initial_actions", [])
+        raw_actions: list[dict[str, Any]] = []
+        for page in pages:
+            raw_actions.extend(self._collect_raw_actions(page))
+
+        normalized: list[RecordedAction] = []
+        for raw in raw_actions:
+            if not isinstance(raw, dict):
+                continue
+            action = self._normalize_action(raw)
+            if action:
+                normalized.append(action)
+
+        normalized.sort(key=lambda action: action.timestamp)
+        combined: list[RecordedAction] = []
+        if (
+            start_url
+            and start_url != "about:blank"
+            and not any(
+                action.type == ActionType.NAVIGATE and action.value == start_url
+                for action in initial_actions
+            )
+        ):
+            initial_actions.insert(
+                0,
+                RecordedAction(
+                    type=ActionType.NAVIGATE,
+                    value=start_url,
+                    timestamp=0.0,
+                ),
+            )
+            session_data["initial_actions"] = initial_actions
+
+        combined.extend(initial_actions)
+        for action in normalized:
+            if start_url and action.type == ActionType.NAVIGATE and action.value == start_url:
+                continue
+            combined.append(action)
+
+        combined.sort(key=lambda action: action.timestamp)
+        session.actions = combined
+
+        on_action = session_data.get("on_action")
+        if not on_action:
+            return
+
+        seen = session_data.setdefault("seen_actions", set())
+        for action in session.actions:
+            key = (
+                action.timestamp,
+                action.type.value,
+                action.selector,
+                action.value,
+                action.variable_name,
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            on_action(action)
 
     def _do_start_recording(
         self, session_id: str, start_url: str, profile_id: str | None = None
@@ -384,16 +478,24 @@ class RecordingService:
             profile_id=profile_id,
         )
 
+        initial_actions: list[RecordedAction] = []
         self._sessions[session_id] = {
             "session": session,
             "context": context,
             "page": page,
             "start_time": time.time(),
             "profile_id": profile_id,
+            "initial_actions": initial_actions,
         }
 
         if start_url and start_url != "about:blank":
             page.goto(start_url)
+            navigate_action = RecordedAction(
+                type=ActionType.NAVIGATE,
+                value=start_url,
+                timestamp=0.0,
+            )
+            initial_actions.append(navigate_action)
             session.actions.append(
                 RecordedAction(
                     type=ActionType.NAVIGATE,
@@ -407,35 +509,13 @@ class RecordingService:
     def _collect_actions_from_page(self, page: Page) -> list[RecordedAction]:
         """Collect recorded actions from page JavaScript."""
         actions: list[RecordedAction] = []
-        try:
-            raw_actions = page.evaluate("window.__recordedActions || []")
-            for raw in raw_actions:
-                action_type = raw.get("type", "")
-                type_map = {
-                    "click": ActionType.CLICK,
-                    "fill": ActionType.FILL,
-                    "select": ActionType.SELECT,
-                    "check": ActionType.CHECK,
-                    "uncheck": ActionType.UNCHECK,
-                    "press": ActionType.PRESS,
-                    "submit": ActionType.CLICK,
-                    "scroll": ActionType.SCROLL,
-                    "hover": ActionType.HOVER,
-                }
-                if action_type in type_map:
-                    actions.append(
-                        RecordedAction(
-                            type=type_map[action_type],
-                            selector=raw.get("selector"),
-                            value=raw.get("value"),
-                            timestamp=raw.get("timestamp", 0),
-                            x=raw.get("x"),
-                            y=raw.get("y"),
-                            robust_selector=raw.get("robust_selector"),
-                        )
-                    )
-        except Exception as e:  # noqa: BLE001
-            logger.warning("Failed to collect actions from page: %s", e)
+        raw_actions = self._collect_raw_actions(page)
+        for raw in raw_actions:
+            if not isinstance(raw, dict):
+                continue
+            action = self._normalize_action(raw)
+            if action:
+                actions.append(action)
         return actions
 
     def _capture_screenshot(self, page: Page) -> str:
@@ -447,6 +527,9 @@ class RecordingService:
         """Stop recording (runs in worker thread)."""
         session_data = self._sessions.get(session_id)
         if not session_data:
+            stopped_session = self._stopped_sessions.get(session_id)
+            if stopped_session:
+                return stopped_session
             msg = f"Session {session_id} not found"
             raise ValueError(msg)
 
@@ -454,10 +537,43 @@ class RecordingService:
         page: Page = session_data["page"]
         session: RecordingSession = session_data["session"]
         profile_id = session_data.get("profile_id")
+        start_url = session.start_url
+        initial_actions: list[RecordedAction] = session_data.get("initial_actions", [])
 
-        # Collect actions from injected JavaScript
-        js_actions = self._collect_actions_from_page(page)
-        session.actions.extend(js_actions)
+        pages = []
+        if context:
+            pages.extend(context.pages)
+        if page and page not in pages:
+            pages.append(page)
+
+        actions: list[RecordedAction] = []
+        for pg in pages:
+            actions.extend(self._collect_actions_from_page(pg))
+        combined: list[RecordedAction] = []
+        if (
+            start_url
+            and start_url != "about:blank"
+            and not any(
+                action.type == ActionType.NAVIGATE and action.value == start_url
+                for action in initial_actions
+            )
+        ):
+            initial_actions.insert(
+                0,
+                RecordedAction(
+                    type=ActionType.NAVIGATE,
+                    value=start_url,
+                    timestamp=0.0,
+                ),
+            )
+
+        combined.extend(initial_actions)
+        for action in actions:
+            if start_url and action.type == ActionType.NAVIGATE and action.value == start_url:
+                continue
+            combined.append(action)
+        combined.sort(key=lambda action: action.timestamp)
+        session.actions = combined
 
         # Save profile storage state if profile was used
         if profile_id:
@@ -488,6 +604,7 @@ class RecordingService:
         self,
         start_url: str = "about:blank",
         on_action: Callable[[RecordedAction], None] | None = None,
+        on_status: Callable[[RecordingSession], None] | None = None,
         profile_id: str | None = None,
     ) -> RecordingSession:
         """Start a new recording session."""
@@ -502,6 +619,8 @@ class RecordingService:
 
         if on_action:
             self._sessions[session_id]["on_action"] = on_action
+        if on_status:
+            self._sessions[session_id]["on_status"] = on_status
 
         return session
 
@@ -600,8 +719,12 @@ class RecordingService:
             "scroll": self._action_scroll,
             "hover": self._action_hover,
             "extract": self._action_extract,
+            "extract_text": self._action_extract_text,
+            "extract_html": self._action_extract_html,
+            "extract_attribute": self._action_extract_attribute,
             "ai_extract": self._action_ai_extract,
             "ai_fill": self._action_ai_fill,
+            "execute_js": self._action_execute_js,
         }
         handler = handlers.get(action_type)
         if handler:
@@ -617,6 +740,9 @@ class RecordingService:
         selector = action.get("selector")
         if selector:
             return page.locator(selector).first
+        xpath = action.get("xpath")
+        if xpath:
+            return page.locator(f"xpath={xpath}").first
         return None
 
     def _action_navigate(self, page: Any, action: dict[str, Any], _ctx: dict) -> None:
@@ -671,7 +797,42 @@ class RecordingService:
         locator = self._get_locator(page, action)
         if locator:
             data = locator.text_content()
-            output_key = action.get("output_key", "extracted")
+            output_key = action.get("output_key") or action.get("variable_name") or "extracted"
+            ctx[output_key] = data
+            return data
+        return None
+
+    def _action_extract_text(self, page: Any, action: dict[str, Any], ctx: dict) -> Any:
+        """Extract text content from a locator."""
+        locator = self._get_locator(page, action)
+        if locator:
+            data = locator.text_content()
+            output_key = action.get("variable_name") or action.get("output_key") or "extracted_text"
+            ctx[output_key] = data
+            return data
+        return None
+
+    def _action_extract_html(self, page: Any, action: dict[str, Any], ctx: dict) -> Any:
+        """Extract HTML content from a locator."""
+        locator = self._get_locator(page, action)
+        if locator:
+            data = locator.inner_html()
+            output_key = action.get("variable_name") or action.get("output_key") or "extracted_html"
+            ctx[output_key] = data
+            return data
+        return None
+
+    def _action_extract_attribute(self, page: Any, action: dict[str, Any], ctx: dict) -> Any:
+        """Extract attribute value from a locator."""
+        locator = self._get_locator(page, action)
+        attribute_name = action.get("attribute_name") or action.get("value")
+        if locator and attribute_name:
+            data = locator.get_attribute(attribute_name)
+            output_key = (
+                action.get("variable_name")
+                or action.get("output_key")
+                or "extracted_attribute"
+            )
             ctx[output_key] = data
             return data
         return None
@@ -703,3 +864,14 @@ class RecordingService:
         skill_service = SkillService()
         generated = skill_service.ai_generate(full_prompt)
         locator.fill(generated)
+
+    def _action_execute_js(self, page: Any, action: dict[str, Any], ctx: dict) -> Any:
+        """Execute JavaScript on the page and optionally store result."""
+        js_code = action.get("js_code")
+        if not js_code:
+            return None
+        result = page.evaluate(js_code)
+        variable_name = action.get("variable_name") or action.get("output_key")
+        if variable_name:
+            ctx[variable_name] = result
+        return result
