@@ -28,6 +28,15 @@ POLL_INTERVAL_SECONDS = 0.5
 
 RECORDER_SCRIPT_PATH = Path(__file__).resolve().parent / "scripts" / "recorder.js"
 
+# Treat timestamps above this as "epoch milliseconds" from Date.now().
+EPOCH_MS_THRESHOLD = 100_000_000_000
+
+# Preview replay pacing (best-effort for dynamic UIs).
+PREVIEW_DELAY_CAP_SECONDS = 2.0
+PREVIEW_DELAY_MIN_SECONDS = 0.2
+PREVIEW_POST_CLICK_SLEEP_SECONDS = 0.8
+PREVIEW_POST_NAVIGATE_SLEEP_SECONDS = 0.2
+
 
 class RecordingService:
     """Service for recording browser actions using Playwright."""
@@ -691,12 +700,30 @@ class RecordingService:
         page = context.new_page()
 
         try:
-            for action in actions:
-                self._execute_action(page, action)
+            ctx: dict[str, Any] = {}
+            prev_epoch_ms: float | None = None
+            for idx, action in enumerate(actions, start=1):
+                try:
+                    ts = action.get("timestamp")
+                    if isinstance(ts, (int, float)) and ts > EPOCH_MS_THRESHOLD:
+                        if prev_epoch_ms is not None and ts >= prev_epoch_ms:
+                            # Cap the delay so previews don't become painfully slow, but still
+                            # reflect user timing enough for dynamic UIs (menus, dialogs, etc.).
+                            delay = min((ts - prev_epoch_ms) / 1000.0, PREVIEW_DELAY_CAP_SECONDS)
+                            if delay >= PREVIEW_DELAY_MIN_SECONDS:
+                                time.sleep(delay)
+                        prev_epoch_ms = float(ts)
+
+                    self._execute_action(page, action, ctx)
+                except Exception as exc:
+                    action_type = action.get("type", "unknown")
+                    msg = f"Preview failed at step {idx} ({action_type}): {exc}"
+                    raise RuntimeError(msg) from exc
 
             result = {
                 "url": page.url,
                 "title": page.title(),
+                "extracted": ctx,
             }
         finally:
             context.close()
@@ -743,19 +770,79 @@ class RecordingService:
         xpath = action.get("xpath")
         if xpath:
             return page.locator(f"xpath={xpath}").first
+
+        # Recorded accessibility metadata can be a strong fallback for preview replay.
+        accessibility = action.get("accessibility") or {}
+        if isinstance(accessibility, dict):
+            role = accessibility.get("role")
+            name = accessibility.get("name")
+            if role and name:
+                with contextlib.suppress(Exception):
+                    return page.get_by_role(role, name=name).first
         return None
 
     def _action_navigate(self, page: Any, action: dict[str, Any], _ctx: dict) -> None:
-        page.goto(action.get("value"))
-        page.wait_for_load_state("networkidle")
+        url = action.get("value") or action.get("url")
+        if not url:
+            return
+        # Avoid hanging previews on pages that never reach "networkidle".
+        page.goto(url, wait_until="domcontentloaded")
+        with contextlib.suppress(Exception):
+            page.wait_for_load_state("networkidle", timeout=5000)
+        time.sleep(PREVIEW_POST_NAVIGATE_SLEEP_SECONDS)
 
     def _action_click(self, page: Any, action: dict[str, Any], _ctx: dict) -> None:
-        locator = self._get_locator(page, action)
-        if locator:
-            locator.click()
-        elif action.get("x") is not None and action.get("y") is not None:
+        def _candidate_locators() -> list[Any]:
+            candidates: list[Any] = []
+            robust = action.get("robust_selector")
+            if robust and isinstance(robust, str) and robust.startswith("get_by_"):
+                with contextlib.suppress(Exception):
+                    candidates.append(eval(f"page.{robust}").first)  # noqa: S307
+
+            accessibility = action.get("accessibility") or {}
+            if isinstance(accessibility, dict):
+                role = accessibility.get("role")
+                name = accessibility.get("name")
+                if role and role != "generic" and name:
+                    with contextlib.suppress(Exception):
+                        candidates.append(page.get_by_role(role, name=name).first)
+
+            text_value = (action.get("value") or "").strip()
+            if text_value:
+                with contextlib.suppress(Exception):
+                    candidates.append(page.get_by_text(text_value, exact=True).first)
+
+            # Keep low-level selectors as fallbacks.
+            selector = action.get("selector")
+            xpath = action.get("xpath")
+            if selector:
+                candidates.append(page.locator(selector).first)
+            if xpath:
+                candidates.append(page.locator(f"xpath={xpath}").first)
+
+            return candidates
+
+        last_error: Exception | None = None
+        for locator in _candidate_locators():
+            try:
+                with contextlib.suppress(Exception):
+                    locator.wait_for(state="visible", timeout=5000)
+                locator.click(timeout=5000)
+                last_error = None
+                break
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+
+        if last_error is not None and action.get("x") is not None and action.get("y") is not None:
             page.mouse.click(action["x"], action["y"])
-        page.wait_for_load_state("domcontentloaded")
+            last_error = None
+
+        if last_error is not None:
+            raise last_error
+
+        with contextlib.suppress(Exception):
+            page.wait_for_load_state("domcontentloaded", timeout=10000)
+        time.sleep(PREVIEW_POST_CLICK_SLEEP_SECONDS)
 
     def _action_fill(self, page: Any, action: dict[str, Any], ctx: dict) -> None:
         locator = self._get_locator(page, action)

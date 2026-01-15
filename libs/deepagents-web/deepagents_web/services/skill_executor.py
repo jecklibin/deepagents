@@ -146,6 +146,13 @@ class SkillExecutor:
         if not isinstance(result, dict):
             return str(result)
 
+        extracted = result.get("extracted")
+        if self._has_meaningful_extracted(extracted):
+            # When the user recorded extraction steps, default to showing only the
+            # extracted payload.
+            # Page context can still be inspected by re-running with no extraction steps.
+            return json.dumps({"extracted": extracted}, indent=2, ensure_ascii=False)
+
         output_parts: list[str] = []
 
         if result.get("title"):
@@ -169,6 +176,21 @@ class SkillExecutor:
         if output_parts:
             return "\n".join(output_parts)
         return json.dumps(result, indent=2, ensure_ascii=False)
+
+    def _has_meaningful_extracted(self, extracted: Any) -> bool:
+        if not isinstance(extracted, dict):
+            return False
+        if not extracted:
+            return False
+        for value in extracted.values():
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            if isinstance(value, (list, dict)) and not value:
+                continue
+            return True
+        return False
 
     def _format_content(
         self, result: dict[str, Any], output_parts: list[str]

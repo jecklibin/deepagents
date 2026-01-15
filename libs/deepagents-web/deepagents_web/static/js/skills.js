@@ -19,6 +19,31 @@ class SkillsManager {
         this.initBrowserProfiles();
     }
 
+    dedupeActions(actions) {
+        if (!Array.isArray(actions)) return actions;
+        const seen = new Set();
+        const result = [];
+        for (const action of actions) {
+            if (!action) continue;
+            const key = [
+                action.timestamp,
+                action.type,
+                action.selector,
+                action.xpath,
+                action.value,
+                action.variable_name,
+                action.output_key,
+                action.attribute_name,
+                action.js_code,
+                action.prompt
+            ].join('|');
+            if (seen.has(key)) continue;
+            seen.add(key);
+            result.push(action);
+        }
+        return result;
+    }
+
     // Normalize skill name to valid format (lowercase, hyphens)
     normalizeName(name) {
         return name.toLowerCase()
@@ -405,7 +430,8 @@ class SkillsManager {
 
             // Load actions into editor
             if (data.actions) {
-                this.actionEditor.setActions(data.actions);
+                const deduped = this.dedupeActions(data.actions);
+                this.actionEditor.setActions(deduped);
             }
         } else if (status === 'error') {
             statusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
@@ -423,13 +449,18 @@ class SkillsManager {
             return;
         }
 
+        const deduped = this.dedupeActions(actions);
+        if (deduped.length !== actions.length) {
+            this.actionEditor.setActions(deduped);
+        }
+
         const profileId = this.browserManager.getSelectedProfileId();
 
         try {
             const response = await fetch('/api/recording/preview', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ actions, profile_id: profileId })
+                body: JSON.stringify({ actions: deduped, profile_id: profileId })
             });
 
             if (!response.ok) {
@@ -438,7 +469,11 @@ class SkillsManager {
             }
 
             const result = await response.json();
-            alert(`Preview completed!\nURL: ${result.url}\nTitle: ${result.title}`);
+            if (result.extracted && Object.keys(result.extracted).length > 0) {
+                alert(`Preview extracted:\n${JSON.stringify(result.extracted, null, 2)}`);
+            } else {
+                alert(`Preview completed!\nURL: ${result.url}\nTitle: ${result.title}`);
+            }
         } catch (error) {
             alert('Preview failed: ' + error.message);
         }

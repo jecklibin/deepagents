@@ -37,6 +37,7 @@ class PreviewResponse(BaseModel):
     url: str
     title: str
     success: bool
+    extracted: dict[str, Any] | None = None
 
 
 async def _handle_start(
@@ -206,6 +207,7 @@ async def preview_actions(request: PreviewRequest) -> PreviewResponse:
             url=result.get("url", ""),
             title=result.get("title", ""),
             success=True,
+            extracted=result.get("extracted"),
         )
     except Exception as e:
         logger.exception("Preview failed")

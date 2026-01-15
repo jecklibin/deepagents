@@ -1,5 +1,7 @@
 """Tests for skill executor service."""
 
+import json
+
 import pytest
 
 from deepagents_web.models.skill import SkillResponse, SkillTestResult
@@ -122,3 +124,27 @@ def test_skill_test_result_with_error():
     )
     assert result.success is False
     assert result.error == "Something went wrong"
+
+
+def test_format_result_prefers_extracted_only(executor):
+    result = {
+        "url": "https://example.com",
+        "title": "Example",
+        "content": "lots of content",
+        "extracted": {"project": "foo"},
+    }
+    output = executor._format_result(result)
+    parsed = json.loads(output)
+    assert parsed == {"extracted": {"project": "foo"}}
+
+
+def test_format_result_falls_back_when_extracted_empty(executor):
+    result = {
+        "url": "https://example.com",
+        "title": "Example",
+        "content": "lots of content",
+        "extracted": {},
+    }
+    output = executor._format_result(result)
+    assert "Page Title:" in output
+    assert "URL:" in output

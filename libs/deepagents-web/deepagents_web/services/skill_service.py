@@ -324,23 +324,28 @@ Output contract:
            - After clicks: page.wait_for_load_state('domcontentloaded')
            - For dynamic elements: expect(locator).to_be_visible()
         5. Handle potential timing issues with explicit waits
-        6. Return a minimal JSON result focused on recorded extraction:
-           - Always include `extracted` (dict) with all recorded extracted variables
-           - Include `url` and `title` for debugging/context
-           - Do NOT dump full-page content/links/tables/lists unless explicitly required by the task
+        6. Conditional result payload:
+           - Always build `extracted: dict[str, Any]` with all recorded extracted variables
+           - If `extracted` contains any meaningful (non-empty) values, return ONLY:
+             `{{"extracted": extracted}}`
+           - If `extracted` is empty, return page info for debugging:
+             `url`, `title`, `content`, `links`, `tables`, `lists`
         7. Include comprehensive error handling with try/except
         8. The script must be self-contained and executable with `python script.py`
         9. Output result as JSON to stdout
 
 ## Result JSON Must Include Extracted Variables
-Include an `extracted` key in the final result:
+Always build an `extracted` dict, and conditionally return only it when non-empty:
 
         ```python
-        result = {{
-            "url": page.url,
-            "title": page.title(),
-            "extracted": extracted,
-        }}
+        if extracted:
+            result = {{"extracted": extracted}}
+        else:
+            result = {{
+                "url": page.url,
+                "title": page.title(),
+                # ... content keys when no extraction happened
+            }}
         ```
 
 ## CRITICAL: Main block must have try/except
