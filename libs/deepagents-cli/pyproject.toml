@@ -60,6 +60,11 @@ lint = [
     "mypy"
 ]
 
+cua = [
+    "cua-agent",
+    "cua-computer",
+]
+
 [build-system]
 requires = ["setuptools>=73.0.0", "wheel"]
 build-backend = "setuptools.build_meta"

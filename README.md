@@ -10,6 +10,17 @@ Agents can increasingly tackle long-horizon tasks, [with agent task length doubl
 - **[Quickstarts Repo](https://github.com/langchain-ai/deepagents-quickstarts)** - Examples and use-cases
 - **[CLI](libs/deepagents-cli/)** - Interactive command-line interface with skills, memory, and HITL workflows
 
+## Project Structure
+
+```
+libs/
+|-- deepagents/       # Core agent library
+|-- deepagents-cli/   # Interactive CLI (Textual UI)
+|-- deepagents-web/   # Web service + frontend
+|-- harbor/           # Agent evaluation framework
+`-- acp/              # Agent Client Protocol (WIP)
+```
+
 ## 🚀 Quickstart
 
 `deepagents` supports custom tools alongside its built-in tools (listed below). In this example, we'll add the optional `tavily` tool for web search.
@@ -45,6 +56,33 @@ result = agent.invoke({"messages": [{"role": "user", "content": "What is LangGra
 ```
 
 The agent created with `create_deep_agent` is compiled [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) `StateGraph`, so it can be used with streaming, human-in-the-loop, memory, or Studio just like any LangGraph agent. See our [quickstarts repo](https://github.com/langchain-ai/deepagents-quickstarts) for more examples.
+
+## Computer-Use Subagent (CUA)
+
+The CLI can optionally enable a CUA-powered computer-use subagent for UI automation tasks.
+
+Install optional dependencies (requires Python 3.12 or 3.13):
+
+```bash
+cd libs/deepagents-cli
+uv sync --group cua
+```
+
+Set environment variables as needed (cloud provider requires API key + container name):
+
+```bash
+export CUA_API_KEY=your_key
+export CUA_CONTAINER_NAME=your_container
+export CUA_PROVIDER_TYPE=cloud   # or lume, docker
+export CUA_OS_TYPE=linux         # or macos
+export CUA_MODEL=anthropic/claude-sonnet-4-5-20250929
+```
+
+Run the CLI with CUA enabled:
+
+```bash
+deepagents --cua --cua-model anthropic/claude-sonnet-4-5-20250929
+```
 
 ## Customizing Deep Agents
 

@@ -23,7 +23,14 @@ def get_agent_service() -> AgentService:
     """Get or create the agent service."""
     global _agent_service  # noqa: PLW0603
     if _agent_service is None:
-        _agent_service = AgentService(auto_approve=web_settings.auto_approve)
+        _agent_service = AgentService(
+            auto_approve=web_settings.auto_approve,
+            enable_cua=web_settings.enable_cua,
+            cua_model=web_settings.cua_model,
+            cua_provider=web_settings.cua_provider,
+            cua_os=web_settings.cua_os,
+            cua_trajectory_dir=web_settings.cua_trajectory_dir,
+        )
     return _agent_service
 
 

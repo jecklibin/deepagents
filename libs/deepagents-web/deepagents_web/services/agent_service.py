@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from deepagents_cli.agent import create_cli_agent
 from deepagents_cli.config import SessionState, create_model
+from deepagents_cli.integrations.cua import CuaConfig, load_cua_config
 from langgraph.types import Command
 from pydantic import ValidationError
 
@@ -56,10 +58,25 @@ class AgentSession:
 class AgentService:
     """Service for managing agent sessions and streaming responses."""
 
-    def __init__(self, agent_name: str = "agent", *, auto_approve: bool = False) -> None:
+    def __init__(
+        self,
+        agent_name: str = "agent",
+        *,
+        auto_approve: bool = False,
+        enable_cua: bool = True,
+        cua_model: str | None = None,
+        cua_provider: str | None = None,
+        cua_os: str | None = None,
+        cua_trajectory_dir: str | None = None,
+    ) -> None:
         """Initialize the agent service."""
         self.agent_name = agent_name
         self.auto_approve = auto_approve
+        self.enable_cua = enable_cua
+        self.cua_model = cua_model
+        self.cua_provider = cua_provider
+        self.cua_os = cua_os
+        self.cua_trajectory_dir = cua_trajectory_dir
         self.sessions: dict[str, AgentSession] = {}
 
     async def create_session(self) -> str:
@@ -67,11 +84,22 @@ class AgentService:
         session_id = str(uuid.uuid4())
         model = create_model()
 
+        cua_config: CuaConfig | None = None
+        if self.enable_cua:
+            cua_config = load_cua_config(
+                model=self.cua_model,
+                os_type=self.cua_os,
+                provider_type=self.cua_provider,
+                trajectory_dir=self.cua_trajectory_dir,
+            )
+
         agent, _backend = await create_cli_agent(
             model=model,
             assistant_id=self.agent_name,
             auto_approve=self.auto_approve,
             enable_shell=True,
+            enable_cua=self.enable_cua,
+            cua_config=cua_config,
         )
 
         session_state = SessionState(auto_approve=self.auto_approve)
@@ -173,27 +201,61 @@ class AgentService:
         if not isinstance(data, dict):
             return
 
-        if "__interrupt__" in data:
-            for interrupt in data["__interrupt__"]:
-                try:
-                    request_data = interrupt.value
-                    action_requests = request_data.get("action_requests", [])
-                    if action_requests:
-                        action = action_requests[0]
-                        interrupt_req = InterruptRequest(
-                            interrupt_id=interrupt.id,
-                            tool_name=action.get("name", "unknown"),
-                            description=action.get("description", ""),
-                            args=action.get("args", {}),
-                        )
-                        session.pending_interrupts[interrupt.id] = request_data
-                        yield WebSocketMessage(type="interrupt", data=interrupt_req.model_dump())
-                except (ValidationError, KeyError, AttributeError):
+        seen_interrupt_ids: set[str] = set()
+        for interrupt in self._iter_interrupts(data):
+            try:
+                interrupt_id = getattr(interrupt, "id", None)
+                if interrupt_id and interrupt_id in seen_interrupt_ids:
                     continue
+                request_data = interrupt.value
+                action_requests = request_data.get("action_requests", [])
+                if not action_requests:
+                    continue
+                action = action_requests[0]
+                interrupt_req = InterruptRequest(
+                    interrupt_id=interrupt_id or "unknown",
+                    tool_name=action.get("name", "unknown"),
+                    description=action.get("description", ""),
+                    args=action.get("args", {}),
+                )
+                if interrupt_id:
+                    seen_interrupt_ids.add(interrupt_id)
+                    session.pending_interrupts[interrupt_id] = request_data
+                yield WebSocketMessage(type="interrupt", data=interrupt_req.model_dump())
+            except (ValidationError, KeyError, AttributeError):
+                continue
 
-        chunk_data = next(iter(data.values())) if data else None
-        if chunk_data and isinstance(chunk_data, dict) and "todos" in chunk_data:
-            yield WebSocketMessage(type="todo", data=chunk_data["todos"])
+        todos = self._find_todos(data)
+        if todos is not None:
+            yield WebSocketMessage(type="todo", data=todos)
+
+    def _iter_interrupts(self, data: Any) -> Iterable[Any]:
+        if isinstance(data, dict):
+            interrupts = data.get("__interrupt__")
+            if isinstance(interrupts, list):
+                for interrupt in interrupts:
+                    yield interrupt
+            for value in data.values():
+                yield from self._iter_interrupts(value)
+        elif isinstance(data, list):
+            for item in data:
+                yield from self._iter_interrupts(item)
+
+    def _find_todos(self, data: Any) -> list[dict[str, Any]] | None:
+        if isinstance(data, dict):
+            todos = data.get("todos")
+            if isinstance(todos, list):
+                return todos
+            for value in data.values():
+                found = self._find_todos(value)
+                if found is not None:
+                    return found
+        elif isinstance(data, list):
+            for item in data:
+                found = self._find_todos(item)
+                if found is not None:
+                    return found
+        return None
 
     async def _handle_messages(
         self,

@@ -9,6 +9,7 @@ from deepagents.backends import CompositeBackend
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.backends.sandbox import SandboxBackendProtocol
 from deepagents.middleware import MemoryMiddleware, SkillsMiddleware
+from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 from langchain.agents.middleware import (
     InterruptOnConfig,
 )
@@ -22,6 +23,7 @@ from langgraph.pregel import Pregel
 from langgraph.runtime import Runtime
 
 from deepagents_cli.config import COLORS, config, console, get_default_coding_instructions, settings
+from deepagents_cli.integrations.cua import CuaConfig, build_cua_subagent, load_cua_config
 from deepagents_cli.integrations.sandbox_factory import get_default_working_dir
 from deepagents_cli.mcp_proxy import get_mcp_tools
 from deepagents_cli.shell import ShellMiddleware
@@ -336,6 +338,9 @@ async def create_cli_agent(
     enable_memory: bool = True,
     enable_skills: bool = True,
     enable_shell: bool = True,
+    enable_cua: bool = True,
+    cua_config: CuaConfig | None = None,
+    subagents: list[SubAgent | CompiledSubAgent] | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> tuple[Pregel, CompositeBackend]:
     """Create a CLI-configured agent with flexible options.
@@ -358,6 +363,9 @@ async def create_cli_agent(
         enable_memory: Enable MemoryMiddleware for persistent memory
         enable_skills: Enable SkillsMiddleware for custom agent skills
         enable_shell: Enable ShellMiddleware for local shell execution (only in local mode)
+        enable_cua: Enable the CUA computer-use subagent.
+        cua_config: Optional configuration for the CUA subagent.
+        subagents: Optional list of additional subagent specs.
         checkpointer: Optional checkpointer for session persistence. If None, uses
                      InMemorySaver (no persistence across CLI invocations).
 
@@ -462,6 +470,12 @@ async def create_cli_agent(
         routes={},
     )
 
+    # Build subagent list (optional CUA integration)
+    subagent_specs: list[SubAgent | CompiledSubAgent] = list(subagents or [])
+    if enable_cua:
+        resolved_cua_config = cua_config or load_cua_config()
+        subagent_specs.append(build_cua_subagent(resolved_cua_config))
+
     # Create the agent
     # Use provided checkpointer or fallback to InMemorySaver
     final_checkpointer = checkpointer if checkpointer is not None else InMemorySaver()
@@ -473,5 +487,6 @@ async def create_cli_agent(
         middleware=agent_middleware,
         interrupt_on=interrupt_on,
         checkpointer=final_checkpointer,
+        subagents=subagent_specs,
     ).with_config(config)
     return agent, composite_backend

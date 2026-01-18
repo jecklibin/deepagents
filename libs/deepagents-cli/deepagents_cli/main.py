@@ -17,6 +17,7 @@ from deepagents_cli.config import (
     create_model,
     settings,
 )
+from deepagents_cli.integrations.cua import load_cua_config
 from deepagents_cli.integrations.sandbox_factory import create_sandbox
 from deepagents_cli.sessions import (
     delete_thread_command,
@@ -151,6 +152,27 @@ def parse_args() -> argparse.Namespace:
         "--sandbox-setup",
         help="Path to setup script to run in sandbox after creation",
     )
+    parser.add_argument(
+        "--cua",
+        action="store_true",
+        help="Enable CUA computer-use subagent (optional integration).",
+    )
+    parser.add_argument(
+        "--cua-model",
+        help="CUA model name (default: CUA_MODEL env or project default).",
+    )
+    parser.add_argument(
+        "--cua-provider",
+        help="CUA provider type (cloud, lume, docker). Default: CUA_PROVIDER_TYPE env.",
+    )
+    parser.add_argument(
+        "--cua-os",
+        help="CUA OS type (linux or macos). Default: CUA_OS_TYPE env.",
+    )
+    parser.add_argument(
+        "--cua-trajectory-dir",
+        help="Directory to store CUA trajectories/screenshots. Default: CUA_TRAJECTORY_DIR env.",
+    )
     return parser.parse_args()
 
 
@@ -163,6 +185,11 @@ async def run_textual_cli_async(
     model_name: str | None = None,
     thread_id: str | None = None,
     is_resumed: bool = False,
+    enable_cua: bool = True,
+    cua_model: str | None = None,
+    cua_provider: str | None = None,
+    cua_os: str | None = None,
+    cua_trajectory_dir: str | None = None,
 ) -> None:
     """Run the Textual CLI interface (async version).
 
@@ -208,6 +235,16 @@ async def run_textual_cli_async(
                 sys.exit(1)
 
         try:
+            cua_config = (
+                load_cua_config(
+                    model=cua_model,
+                    os_type=cua_os,
+                    provider_type=cua_provider,
+                    trajectory_dir=cua_trajectory_dir,
+                )
+                if enable_cua
+                else None
+            )
             agent, composite_backend = await create_cli_agent(
                 model=model,
                 assistant_id=assistant_id,
@@ -215,6 +252,8 @@ async def run_textual_cli_async(
                 sandbox=sandbox_backend,
                 sandbox_type=sandbox_type if sandbox_type != "none" else None,
                 auto_approve=auto_approve,
+                enable_cua=enable_cua,
+                cua_config=cua_config,
                 checkpointer=checkpointer,
             )
 
@@ -327,6 +366,11 @@ def cli_main() -> None:
                     model_name=getattr(args, "model", None),
                     thread_id=thread_id,
                     is_resumed=is_resumed,
+                    enable_cua=args.cua,
+                    cua_model=args.cua_model,
+                    cua_provider=args.cua_provider,
+                    cua_os=args.cua_os,
+                    cua_trajectory_dir=args.cua_trajectory_dir,
                 )
             )
     except KeyboardInterrupt:
