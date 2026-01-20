@@ -64,6 +64,12 @@ const AddIcon = () => (
   </svg>
 );
 
+const CloseIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6.4 19L5 17.6l5.6-5.6L5 6.4L6.4 5l5.6 5.6L17.6 5L19 6.4L13.4 12l5.6 5.6l-1.4 1.4l-5.6-5.6z" fill="currentColor"/>
+  </svg>
+);
+
 const ChatArea = () => {
   const [inputValue, setInputValue] = useState('');
   const chatContainerRef = useRef(null);
@@ -79,7 +85,9 @@ const ChatArea = () => {
     todos,
     setCurrentSession,
     addSession,
+    removeSession,
     connect,
+    disconnect,
     sendMessage,
     stopStreaming,
     respondToInterrupt,
@@ -111,6 +119,17 @@ const ChatArea = () => {
   const handleSelectSession = (sessionId) => {
     setCurrentSession(sessionId);
     connect(sessionId);
+  };
+
+  // Close session
+  const handleCloseSession = (e, sessionId) => {
+    e.stopPropagation();
+    if (window.confirm('确定要关闭此会话吗？')) {
+      if (currentSessionId === sessionId) {
+        disconnect();
+      }
+      removeSession(sessionId);
+    }
   };
 
   // Send message
@@ -155,7 +174,7 @@ const ChatArea = () => {
             {sessions.map((session) => (
               <div
                 key={session.id}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg shrink-0 cursor-pointer transition-colors ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg shrink-0 cursor-pointer transition-colors group ${
                   currentSessionId === session.id
                     ? 'bg-blue-50 border border-blue-200'
                     : 'bg-slate-50 border border-slate-200 hover:bg-slate-100'
@@ -168,6 +187,17 @@ const ChatArea = () => {
                 <span className={`text-[10px] ${currentSessionId === session.id ? 'text-blue-400' : 'text-slate-400'}`}>
                   {session.date}
                 </span>
+                <button
+                  className={`p-0.5 rounded transition-all ${
+                    currentSessionId === session.id
+                      ? 'text-blue-400 hover:text-blue-600 hover:bg-blue-100'
+                      : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200 opacity-0 group-hover:opacity-100'
+                  }`}
+                  onClick={(e) => handleCloseSession(e, session.id)}
+                  title="关闭会话"
+                >
+                  <CloseIcon className="text-sm" />
+                </button>
               </div>
             ))}
             {sessions.length === 0 && (

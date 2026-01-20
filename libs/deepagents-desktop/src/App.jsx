@@ -5,6 +5,7 @@ import ChatArea from './components/ChatArea';
 import ExecutionPanel from './components/ExecutionPanel';
 import RiskModal from './components/RiskModal';
 import RecordingModal from './components/RecordingModal';
+import SkillDetailModal from './components/SkillDetailModal';
 import useAppStore from './store/appStore';
 import useSkillsStore from './store/skillsStore';
 import apiService from './services/api';
@@ -50,6 +51,7 @@ const App = () => {
         onConfirm={handleRiskConfirm}
       />
       <RecordingModal />
+      <SkillDetailModal />
     </div>
   );
 };

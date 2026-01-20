@@ -158,14 +158,25 @@ const RecordingModal = () => {
   };
 
   const getActionLabel = (action) => {
-    switch (action.action_type) {
-      case 'navigate': return `导航到 ${action.url}`;
+    if (!action) return '未知操作';
+
+    // Backend uses 'type' field, not 'action_type'
+    const actionType = action.type || action.action_type;
+
+    switch (actionType) {
+      case 'navigate': return `导航到 ${action.url || action.value || '页面'}`;
       case 'click': return `点击 ${action.selector || action.text || '元素'}`;
-      case 'fill': return `填写 "${action.value}" 到 ${action.selector || '输入框'}`;
-      case 'select': return `选择 "${action.value}"`;
-      case 'extract': return `提取数据`;
+      case 'fill': return `填写 "${action.value || ''}" 到 ${action.selector || '输入框'}`;
+      case 'select': return `选择 "${action.value || ''}"`;
+      case 'extract': return `提取数据 ${action.selector || ''}`;
+      case 'extract_text': return `提取文本 ${action.selector || ''}`;
+      case 'ai_extract': return `AI提取: ${action.prompt || ''}`;
       case 'scroll': return `滚动页面`;
-      default: return action.action_type;
+      case 'hover': return `悬停 ${action.selector || '元素'}`;
+      case 'press': return `按键 ${action.value || ''}`;
+      case 'wait': return `等待 ${action.value || ''}ms`;
+      case 'screenshot': return `截图`;
+      default: return actionType || '未知操作';
     }
   };
 
@@ -281,7 +292,7 @@ const RecordingModal = () => {
                     </button>
                   </div>
                   <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto">
-                    {actions.map((action, index) => (
+                    {actions.filter(Boolean).map((action, index) => (
                       <div
                         key={index}
                         className="flex items-center justify-between px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-50"

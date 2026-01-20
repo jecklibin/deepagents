@@ -33,8 +33,20 @@ const DeleteIcon = () => (
   </svg>
 );
 
+const ViewIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 16q1.875 0 3.188-1.312T16.5 11.5t-1.312-3.187T12 7T8.813 8.313T7.5 11.5t1.313 3.188T12 16m0-1.8q-1.125 0-1.912-.788T9.3 11.5t.788-1.912T12 8.8t1.913.788t.787 1.912t-.787 1.912T12 14.2m0 4.8q-3.65 0-6.65-2.037T1 11.5q1.35-3.425 4.35-5.462T12 4t6.65 2.038T23 11.5q-1.35 3.425-4.35 5.463T12 19" fill="currentColor"/>
+  </svg>
+);
+
+const EditIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-2 2v-4.25L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.438.65T21 6.4q0 .4-.137.763t-.438.662L7.25 21zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z" fill="currentColor"/>
+  </svg>
+);
+
 const SkillsSidebar = () => {
-  const { activeTab, setActiveTab, openCreateSkillModal } = useAppStore();
+  const { activeTab, setActiveTab, openCreateSkillModal, openSkillDetailModal } = useAppStore();
   const { skills, selectedSkill, loading, fetchSkills, selectSkill, deleteSkill } = useSkillsStore();
 
   useEffect(() => {
@@ -56,6 +68,18 @@ const SkillsSidebar = () => {
         console.error('Failed to delete skill:', error);
       }
     }
+  };
+
+  const handleViewSkill = async (e, skillName) => {
+    e.stopPropagation();
+    await selectSkill(skillName);
+    openSkillDetailModal('view');
+  };
+
+  const handleEditSkill = async (e, skillName) => {
+    e.stopPropagation();
+    await selectSkill(skillName);
+    openSkillDetailModal('edit');
   };
 
   return (
@@ -165,12 +189,29 @@ const SkillsSidebar = () => {
                       {skill.type === 'browser' ? '浏览器技能' : skill.type === 'manual' ? '手动技能' : '技能'}
                     </div>
                   </div>
-                  <button
-                    className="p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                    onClick={(e) => handleDeleteSkill(e, skill.name)}
-                  >
-                    <DeleteIcon />
-                  </button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button
+                      className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
+                      onClick={(e) => handleViewSkill(e, skill.name)}
+                      title="查看"
+                    >
+                      <ViewIcon />
+                    </button>
+                    <button
+                      className="p-1 text-slate-400 hover:text-emerald-500 transition-colors"
+                      onClick={(e) => handleEditSkill(e, skill.name)}
+                      title="编辑"
+                    >
+                      <EditIcon />
+                    </button>
+                    <button
+                      className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                      onClick={(e) => handleDeleteSkill(e, skill.name)}
+                      title="删除"
+                    >
+                      <DeleteIcon />
+                    </button>
+                  </div>
                 </div>
               ))
             )}

@@ -15,9 +15,10 @@ export const useRecordingStore = create((set, get) => ({
   fetchBrowserProfiles: async () => {
     try {
       const profiles = await apiService.getBrowserProfiles();
-      set({ browserProfiles: profiles });
+      // Ensure profiles is always an array
+      set({ browserProfiles: Array.isArray(profiles) ? profiles : [] });
     } catch (error) {
-      set({ error: error.message });
+      set({ error: error.message, browserProfiles: [] });
     }
   },
 
@@ -78,25 +79,37 @@ export const useRecordingStore = create((set, get) => ({
   },
 
   handleMessage: (data) => {
-    const { type, action, actions: allActions, status, error } = data;
+    const { type, data: msgData } = data;
 
     switch (type) {
-      case 'status':
-        set({ isRecording: status === 'recording' });
+      case 'session':
+        // Session status update from backend
+        if (msgData) {
+          set({
+            isRecording: msgData.status === 'recording',
+            actions: Array.isArray(msgData.actions) ? msgData.actions : get().actions,
+          });
+        }
         break;
 
       case 'action':
-        set((state) => ({
-          actions: [...state.actions, action],
-        }));
+        // New action recorded
+        if (msgData) {
+          set((state) => ({
+            actions: [...state.actions, msgData],
+          }));
+        }
         break;
 
-      case 'actions':
-        set({ actions: allActions || [] });
+      case 'status':
+        if (msgData) {
+          set({ isRecording: msgData.status === 'recording' });
+        }
         break;
 
       case 'error':
-        set({ error: error, isRecording: false });
+        const errorMsg = typeof msgData === 'string' ? msgData : 'Recording error';
+        set({ error: errorMsg, isRecording: false });
         break;
 
       default:
@@ -111,9 +124,10 @@ export const useRecordingStore = create((set, get) => ({
 
     set({ actions: [], currentUrl: url });
 
+    // Backend expects 'start_url' not 'url'
     return wsService.send('recording', 'default', {
       type: 'start',
-      url,
+      start_url: url,
       profile_id: selectedProfileId,
     });
   },

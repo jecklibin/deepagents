@@ -7,6 +7,8 @@ export const useAppStore = create((set) => ({
   riskModalData: null,
   showCreateSkillModal: false,
   createSkillMode: null, // 'manual' | 'nl' | 'recording'
+  showSkillDetailModal: false,
+  skillDetailMode: 'view', // 'view' | 'edit'
 
   // System status
   systemStatus: 'online', // 'online' | 'offline' | 'error'
@@ -20,6 +22,9 @@ export const useAppStore = create((set) => ({
 
   openCreateSkillModal: (mode) => set({ showCreateSkillModal: true, createSkillMode: mode }),
   closeCreateSkillModal: () => set({ showCreateSkillModal: false, createSkillMode: null }),
+
+  openSkillDetailModal: (mode = 'view') => set({ showSkillDetailModal: true, skillDetailMode: mode }),
+  closeSkillDetailModal: () => set({ showSkillDetailModal: false, skillDetailMode: 'view' }),
 
   setSystemStatus: (status) => set({ systemStatus: status }),
   setApiConnected: (connected) => set({ apiConnected: connected }),

@@ -77,7 +77,9 @@ class ApiService {
 
   // Browser Profiles API
   async getBrowserProfiles() {
-    return this.request(config.endpoints.browserProfiles);
+    const response = await this.request(config.endpoints.browserProfiles);
+    // API returns { profiles: [...] }
+    return response.profiles || [];
   }
 
   async createBrowserProfile(data) {
