@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import wsService from '../services/websocket';
-import apiService from '../services/api';
 
-export const useRecordingStore = create((set, get) => ({
+// Factory function to create recording store with injected services
+export const createRecordingStore = (apiService, wsService) => create((set, get) => ({
   isRecording: false,
   isConnected: false,
+  sessionId: null,  // Track session ID from backend
   actions: [],
   currentUrl: '',
   browserProfiles: [],
@@ -15,7 +15,6 @@ export const useRecordingStore = create((set, get) => ({
   fetchBrowserProfiles: async () => {
     try {
       const profiles = await apiService.getBrowserProfiles();
-      // Ensure profiles is always an array
       set({ browserProfiles: Array.isArray(profiles) ? profiles : [] });
     } catch (error) {
       set({ error: error.message, browserProfiles: [] });
@@ -83,9 +82,10 @@ export const useRecordingStore = create((set, get) => ({
 
     switch (type) {
       case 'session':
-        // Session status update from backend
+        // Backend sends session info with session_id and status
         if (msgData) {
           set({
+            sessionId: msgData.session_id || get().sessionId,
             isRecording: msgData.status === 'recording',
             actions: Array.isArray(msgData.actions) ? msgData.actions : get().actions,
           });
@@ -93,7 +93,6 @@ export const useRecordingStore = create((set, get) => ({
         break;
 
       case 'action':
-        // New action recorded
         if (msgData) {
           set((state) => ({
             actions: [...state.actions, msgData],
@@ -102,8 +101,13 @@ export const useRecordingStore = create((set, get) => ({
         break;
 
       case 'status':
+        // Backend sends status updates
         if (msgData) {
-          set({ isRecording: msgData.status === 'recording' });
+          const newIsRecording = msgData.status === 'recording';
+          set({
+            isRecording: newIsRecording,
+            sessionId: msgData.session_id || get().sessionId,
+          });
         }
         break;
 
@@ -122,9 +126,8 @@ export const useRecordingStore = create((set, get) => ({
     const { isConnected, selectedProfileId } = get();
     if (!isConnected) return false;
 
-    set({ actions: [], currentUrl: url });
+    set({ actions: [], currentUrl: url, sessionId: null });
 
-    // Backend expects 'start_url' not 'url'
     return wsService.send('recording', 'default', {
       type: 'start',
       start_url: url,
@@ -134,12 +137,20 @@ export const useRecordingStore = create((set, get) => ({
 
   // Stop recording
   stopRecording: () => {
-    const { isConnected } = get();
+    const { isConnected, sessionId } = get();
     if (!isConnected) return false;
 
-    wsService.send('recording', 'default', { type: 'stop' });
-    set({ isRecording: false });
+    wsService.send('recording', 'default', {
+      type: 'stop',
+      session_id: sessionId,
+    });
+    // Don't set isRecording to false here - wait for backend confirmation
     return true;
+  },
+
+  // Get session ID for creating skill
+  getSessionId: () => {
+    return get().sessionId;
   },
 
   // Preview recording
@@ -170,12 +181,20 @@ export const useRecordingStore = create((set, get) => ({
     }));
   },
 
-  // Clear actions
+  // Clear actions and session
   clearActions: () => {
-    set({ actions: [] });
+    set({ actions: [], sessionId: null });
   },
 
   clearError: () => set({ error: null }),
 }));
 
-export default useRecordingStore;
+// Will be initialized with services
+export let useRecordingStore = null;
+
+export const initRecordingStore = (apiService, wsService) => {
+  useRecordingStore = createRecordingStore(apiService, wsService);
+  return useRecordingStore;
+};
+
+export default { createRecordingStore, initRecordingStore };

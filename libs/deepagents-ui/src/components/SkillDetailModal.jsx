@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import useAppStore from '../store/appStore';
-import useSkillsStore from '../store/skillsStore';
+import { useAppStore } from '../store/appStore';
+import { useSkillsStore } from '../store/skillsStore';
 
 // Icons
 const CloseIcon = () => (

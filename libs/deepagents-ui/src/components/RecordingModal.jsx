@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import useRecordingStore from '../store/recordingStore';
-import useSkillsStore from '../store/skillsStore';
-import useAppStore from '../store/appStore';
+import { useRecordingStore } from '../store/recordingStore';
+import { useSkillsStore } from '../store/skillsStore';
+import { useAppStore } from '../store/appStore';
 
 // Icons
 const CloseIcon = () => (
@@ -33,6 +33,7 @@ const RecordingModal = () => {
   const {
     isRecording,
     isConnected,
+    sessionId,
     actions,
     browserProfiles,
     selectedProfileId,
@@ -84,6 +85,10 @@ const RecordingModal = () => {
       alert('请输入技能名称');
       return;
     }
+    if (!sessionId) {
+      alert('录制会话不存在，请重新录制');
+      return;
+    }
     if (actions.length === 0) {
       alert('请先录制一些操作');
       return;
@@ -91,11 +96,11 @@ const RecordingModal = () => {
 
     setIsSubmitting(true);
     try {
+      // Backend expects: name, description, session_id
       await createSkillFromRecording({
         name: skillName.trim(),
         description: skillDescription.trim(),
-        actions: actions,
-        profile_id: selectedProfileId,
+        session_id: sessionId,
       });
       closeCreateSkillModal();
       clearActions();
@@ -180,6 +185,9 @@ const RecordingModal = () => {
     }
   };
 
+  // Check if save button should be disabled for recording mode
+  const isRecordingSaveDisabled = isSubmitting || isRecording || !sessionId || actions.length === 0;
+
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center">
       <div className="bg-white rounded-2xl w-[600px] max-h-[80vh] shadow-2xl overflow-hidden flex flex-col">
@@ -206,7 +214,7 @@ const RecordingModal = () => {
             <input
               type="text"
               className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="输入技能名称"
+              placeholder="输入技能名称（小写字母、数字、连字符）"
               value={skillName}
               onChange={(e) => setSkillName(e.target.value)}
             />
@@ -276,6 +284,15 @@ const RecordingModal = () => {
                   </button>
                 )}
               </div>
+
+              {/* Recording status */}
+              {sessionId && (
+                <div className="text-xs text-slate-500">
+                  会话ID: {sessionId.slice(0, 8)}...
+                  {isRecording && <span className="ml-2 text-red-500">● 录制中</span>}
+                  {!isRecording && actions.length > 0 && <span className="ml-2 text-green-500">● 已停止</span>}
+                </div>
+              )}
 
               {/* Recorded actions */}
               {actions.length > 0 && (
@@ -363,7 +380,7 @@ const RecordingModal = () => {
               createSkillMode === 'nl' ? handleSaveNL :
               handleSaveManual
             }
-            disabled={isSubmitting || (createSkillMode === 'recording' && isRecording)}
+            disabled={createSkillMode === 'recording' ? isRecordingSaveDisabled : isSubmitting}
           >
             {isSubmitting ? '保存中...' : '保存技能'}
           </button>

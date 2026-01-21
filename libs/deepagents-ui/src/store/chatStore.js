@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import wsService from '../services/websocket';
 
-export const useChatStore = create((set, get) => ({
+// Factory function to create chat store with injected services
+export const createChatStore = (wsService) => create((set, get) => ({
   sessions: [],
   currentSessionId: null,
   sessionId: null,
@@ -70,14 +70,11 @@ export const useChatStore = create((set, get) => ({
 
     switch (type) {
       case 'session':
-        // Session initialization message from backend
         console.log('Session initialized:', msgData?.session_id);
         set({ sessionId: msgData?.session_id });
         break;
 
       case 'text':
-        // Handle streaming text messages from assistant
-        // Backend sends: {"type": "text", "data": "actual text content"}
         const textContent = typeof msgData === 'string' ? msgData : '';
         if (textContent) {
           set((state) => {
@@ -100,7 +97,6 @@ export const useChatStore = create((set, get) => ({
         break;
 
       case 'tool_call':
-        // Backend sends: {"type": "tool_call", "data": {"name": "...", "args": {...}, "id": "..."}}
         if (msgData) {
           set((state) => ({
             toolCalls: [...state.toolCalls, {
@@ -114,7 +110,6 @@ export const useChatStore = create((set, get) => ({
         break;
 
       case 'tool_result':
-        // Update tool call with result
         if (msgData) {
           set((state) => ({
             toolCalls: state.toolCalls.map((tc) =>
@@ -127,7 +122,6 @@ export const useChatStore = create((set, get) => ({
         break;
 
       case 'interrupt':
-        // Backend sends: {"type": "interrupt", "data": {"interrupt_id": "...", "tool_name": "...", "description": "...", "args": {...}}}
         if (msgData) {
           set({
             pendingInterrupt: {
@@ -142,7 +136,6 @@ export const useChatStore = create((set, get) => ({
         break;
 
       case 'todo':
-        // Backend sends: {"type": "todo", "data": [...]}
         set({ todos: Array.isArray(msgData) ? msgData : [] });
         break;
 
@@ -156,7 +149,6 @@ export const useChatStore = create((set, get) => ({
         break;
 
       case 'error':
-        // Backend sends: {"type": "error", "data": "error message"}
         const errorContent = typeof msgData === 'string' ? msgData : 'Unknown error';
         set({ error: errorContent, isStreaming: false });
         break;
@@ -171,7 +163,6 @@ export const useChatStore = create((set, get) => ({
     const { currentSessionId, isConnected } = get();
     if (!currentSessionId || !isConnected) return false;
 
-    // Add user message
     set((state) => ({
       messages: [
         ...state.messages,
@@ -202,7 +193,6 @@ export const useChatStore = create((set, get) => ({
     const { currentSessionId, pendingInterrupt } = get();
     if (!currentSessionId || !pendingInterrupt) return;
 
-    // Backend expects: {"type": "interrupt_response", "data": {"interrupt_id": "...", "decision": "approve|reject", "message": "..."}}
     wsService.send('chat', currentSessionId, {
       type: 'interrupt_response',
       data: {
@@ -223,4 +213,12 @@ export const useChatStore = create((set, get) => ({
   clearError: () => set({ error: null }),
 }));
 
-export default useChatStore;
+// Will be initialized with services
+export let useChatStore = null;
+
+export const initChatStore = (wsService) => {
+  useChatStore = createChatStore(wsService);
+  return useChatStore;
+};
+
+export default { createChatStore, initChatStore };

@@ -222,3 +222,6 @@ libs/deepagents-cli/TEXTUAL_PROGRESS.md
 
 /tmp/
 */tmp/
+
+# Node.js
+node_modules/

@@ -1,17 +1,17 @@
 import { create } from 'zustand';
 
-export const useAppStore = create((set) => ({
+export const createAppStore = () => create((set) => ({
   // UI State
-  activeTab: 'my-skills', // 'my-skills' | 'market'
+  activeTab: 'my-skills',
   showRiskModal: false,
   riskModalData: null,
   showCreateSkillModal: false,
-  createSkillMode: null, // 'manual' | 'nl' | 'recording'
+  createSkillMode: null,
   showSkillDetailModal: false,
-  skillDetailMode: 'view', // 'view' | 'edit'
+  skillDetailMode: 'view',
 
   // System status
-  systemStatus: 'online', // 'online' | 'offline' | 'error'
+  systemStatus: 'online',
   apiConnected: false,
 
   // Actions
@@ -29,5 +29,8 @@ export const useAppStore = create((set) => ({
   setSystemStatus: (status) => set({ systemStatus: status }),
   setApiConnected: (connected) => set({ apiConnected: connected }),
 }));
+
+// Default store instance
+export const useAppStore = createAppStore();
 
 export default useAppStore;

@@ -1,22 +1,26 @@
-import config from './config';
+// Configurable WebSocket Service Factory
+export function createWsService(config = {}) {
+  const wsBaseUrl = config.wsBaseUrl || 'ws://localhost:8000';
+  const wsEndpoints = {
+    chat: '/api/ws/chat',
+    recording: '/api/ws/recording',
+    ...config.wsEndpoints
+  };
 
-class WebSocketService {
-  constructor() {
-    this.connections = new Map();
-  }
+  const connections = new Map();
 
-  connect(type, sessionId, handlers) {
+  function connect(type, sessionId, handlers) {
     const key = `${type}-${sessionId}`;
 
-    if (this.connections.has(key)) {
-      this.disconnect(type, sessionId);
+    if (connections.has(key)) {
+      disconnect(type, sessionId);
     }
 
     let wsUrl;
     if (type === 'chat') {
-      wsUrl = `${config.wsBaseUrl}${config.ws.chat}?session_id=${sessionId}`;
+      wsUrl = `${wsBaseUrl}${wsEndpoints.chat}?session_id=${sessionId}`;
     } else if (type === 'recording') {
-      wsUrl = `${config.wsBaseUrl}${config.ws.recording}`;
+      wsUrl = `${wsBaseUrl}${wsEndpoints.recording}`;
     } else {
       throw new Error(`Unknown WebSocket type: ${type}`);
     }
@@ -44,17 +48,17 @@ class WebSocketService {
 
     ws.onclose = (event) => {
       console.log(`WebSocket closed: ${type}`, event.code, event.reason);
-      this.connections.delete(key);
+      connections.delete(key);
       handlers.onClose?.(event);
     };
 
-    this.connections.set(key, ws);
+    connections.set(key, ws);
     return ws;
   }
 
-  send(type, sessionId, data) {
+  function send(type, sessionId, data) {
     const key = `${type}-${sessionId}`;
-    const ws = this.connections.get(key);
+    const ws = connections.get(key);
 
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(data));
@@ -63,27 +67,34 @@ class WebSocketService {
     return false;
   }
 
-  disconnect(type, sessionId) {
+  function disconnect(type, sessionId) {
     const key = `${type}-${sessionId}`;
-    const ws = this.connections.get(key);
+    const ws = connections.get(key);
 
     if (ws) {
       ws.close();
-      this.connections.delete(key);
+      connections.delete(key);
     }
   }
 
-  disconnectAll() {
-    this.connections.forEach((ws) => ws.close());
-    this.connections.clear();
+  function disconnectAll() {
+    connections.forEach((ws) => ws.close());
+    connections.clear();
   }
 
-  isConnected(type, sessionId) {
+  function isConnected(type, sessionId) {
     const key = `${type}-${sessionId}`;
-    const ws = this.connections.get(key);
+    const ws = connections.get(key);
     return ws && ws.readyState === WebSocket.OPEN;
   }
+
+  return {
+    connect,
+    send,
+    disconnect,
+    disconnectAll,
+    isConnected,
+  };
 }
 
-export const wsService = new WebSocketService();
-export default wsService;
+export default createWsService;

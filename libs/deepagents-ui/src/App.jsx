@@ -6,11 +6,10 @@ import ExecutionPanel from './components/ExecutionPanel';
 import RiskModal from './components/RiskModal';
 import RecordingModal from './components/RecordingModal';
 import SkillDetailModal from './components/SkillDetailModal';
-import useAppStore from './store/appStore';
-import useSkillsStore from './store/skillsStore';
-import apiService from './services/api';
+import { useAppStore } from './store/appStore';
+import { useSkillsStore } from './store/skillsStore';
 
-const App = () => {
+const DeepAgentsApp = ({ apiService, title = 'DeepAgents', version = 'v1.0.0' }) => {
   const { showRiskModal, riskModalData, hideRiskConfirmation, setApiConnected } = useAppStore();
   const { fetchSkills } = useSkillsStore();
 
@@ -18,8 +17,10 @@ const App = () => {
   useEffect(() => {
     const checkConnection = async () => {
       try {
-        await apiService.getSkills();
-        setApiConnected(true);
+        if (apiService) {
+          await apiService.getSkills();
+          setApiConnected(true);
+        }
       } catch (error) {
         console.error('API connection failed:', error);
         setApiConnected(false);
@@ -28,7 +29,7 @@ const App = () => {
 
     checkConnection();
     fetchSkills();
-  }, []);
+  }, [apiService]);
 
   const handleRiskConfirm = () => {
     if (riskModalData?.onConfirm) {
@@ -39,7 +40,7 @@ const App = () => {
 
   return (
     <div className="bg-slate-50 text-slate-900 font-sans antialiased overflow-hidden h-screen flex flex-col">
-      <Header />
+      <Header title={title} version={version} />
       <main className="flex-1 flex overflow-hidden">
         <SkillsSidebar />
         <ChatArea />
@@ -56,4 +57,4 @@ const App = () => {
   );
 };
 
-export default App;
+export default DeepAgentsApp;

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
-import useSkillsStore from '../store/skillsStore';
-import useAppStore from '../store/appStore';
+import { useSkillsStore } from '../store/skillsStore';
+import { useAppStore } from '../store/appStore';
 
 // Icons
 const AddIcon = () => (

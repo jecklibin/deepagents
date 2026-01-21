@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import useChatStore from '../store/chatStore';
-import useSkillsStore from '../store/skillsStore';
+import { useChatStore } from '../store/chatStore';
+import { useSkillsStore } from '../store/skillsStore';
 import ReactMarkdown from 'react-markdown';
 
 // Icons

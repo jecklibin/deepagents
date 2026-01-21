@@ -1,5 +1,5 @@
 import React from 'react';
-import useChatStore from '../store/chatStore';
+import { useChatStore } from '../store/chatStore';
 
 // Icons
 const CycloneIcon = () => (

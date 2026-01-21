@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import apiService from '../services/api';
 
-export const useSkillsStore = create((set, get) => ({
+// Factory function to create skills store with injected API service
+export const createSkillsStore = (apiService) => create((set, get) => ({
   skills: [],
   selectedSkill: null,
   loading: false,
@@ -11,7 +11,6 @@ export const useSkillsStore = create((set, get) => ({
     set({ loading: true, error: null });
     try {
       const skills = await apiService.getSkills();
-      // Ensure skills is always an array
       set({ skills: Array.isArray(skills) ? skills : [], loading: false });
     } catch (error) {
       console.error('Failed to fetch skills:', error);
@@ -121,4 +120,12 @@ export const useSkillsStore = create((set, get) => ({
   clearError: () => set({ error: null }),
 }));
 
-export default useSkillsStore;
+// Will be initialized with services
+export let useSkillsStore = null;
+
+export const initSkillsStore = (apiService) => {
+  useSkillsStore = createSkillsStore(apiService);
+  return useSkillsStore;
+};
+
+export default { createSkillsStore, initSkillsStore };
