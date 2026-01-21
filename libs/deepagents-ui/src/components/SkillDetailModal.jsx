@@ -21,6 +21,12 @@ const SaveIcon = () => (
   </svg>
 );
 
+const PlayIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8 19V5l11 7z" fill="currentColor"/>
+  </svg>
+);
+
 const BrowserIcon = () => (
   <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
     <path d="M4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20zm0-2h16V8H4zm0 0V8z" fill="currentColor"/>
@@ -41,14 +47,17 @@ const DescriptionIcon = () => (
 
 const SkillDetailModal = () => {
   const { showSkillDetailModal, skillDetailMode, closeSkillDetailModal, openSkillDetailModal } = useAppStore();
-  const { selectedSkill, updateSkill, loading } = useSkillsStore();
+  const { selectedSkill, updateSkill, testSkill, loading } = useSkillsStore();
 
   const [editedSkill, setEditedSkill] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   useEffect(() => {
     if (selectedSkill) {
       setEditedSkill({ ...selectedSkill });
+      setTestResult(null);
     }
   }, [selectedSkill]);
 
@@ -86,6 +95,19 @@ const SkillDetailModal = () => {
     setEditedSkill((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await testSkill(selectedSkill.name);
+      setTestResult(result);
+    } catch (error) {
+      setTestResult({ success: false, error: error.message });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl shadow-2xl w-[700px] max-h-[85vh] flex flex-col">
@@ -104,13 +126,27 @@ const SkillDetailModal = () => {
           </div>
           <div className="flex items-center gap-2">
             {!isEditing && (
-              <button
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
-                onClick={() => openSkillDetailModal('edit')}
-              >
-                <EditIcon />
-                编辑
-              </button>
+              <>
+                <button
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium ${
+                    testing
+                      ? 'bg-green-100 text-green-600'
+                      : 'bg-green-50 text-green-600 hover:bg-green-100'
+                  }`}
+                  onClick={handleTest}
+                  disabled={testing}
+                >
+                  <PlayIcon />
+                  {testing ? '测试中...' : '测试'}
+                </button>
+                <button
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                  onClick={() => openSkillDetailModal('edit')}
+                >
+                  <EditIcon />
+                  编辑
+                </button>
+              </>
             )}
             <button
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -246,6 +282,75 @@ const SkillDetailModal = () => {
               </div>
             )}
           </div>
+
+          {/* Full Content (SKILL.md) */}
+          {selectedSkill.content && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">技能内容 (SKILL.md)</label>
+              {isEditing ? (
+                <textarea
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm resize-none"
+                  rows={15}
+                  value={editedSkill?.content || ''}
+                  onChange={(e) => handleInputChange('content', e.target.value)}
+                />
+              ) : (
+                <pre className="bg-slate-50 rounded-lg p-4 overflow-x-auto text-sm text-slate-700 whitespace-pre-wrap max-h-[400px] overflow-y-auto border border-slate-200">
+                  {selectedSkill.content}
+                </pre>
+              )}
+            </div>
+          )}
+
+          {/* Test Result */}
+          {testResult && (
+            <div className={`rounded-lg p-4 ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-sm ${testResult.success ? 'bg-green-500' : 'bg-red-500'}`}>
+                  {testResult.success ? '✓' : '✕'}
+                </div>
+                <span className={`font-medium ${testResult.success ? 'text-green-700' : 'text-red-700'}`}>
+                  测试{testResult.success ? '成功' : '失败'}
+                </span>
+                {testResult.duration_ms !== undefined && (
+                  <span className="text-sm text-slate-500 ml-2">
+                    耗时: {testResult.duration_ms.toFixed(2)} ms
+                  </span>
+                )}
+              </div>
+              {testResult.output && (
+                <div className="mb-2">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">输出</label>
+                  <pre className="bg-white rounded p-2 text-sm text-slate-700 overflow-x-auto whitespace-pre-wrap max-h-[150px] overflow-y-auto">
+                    {typeof testResult.output === 'string' ? testResult.output : JSON.stringify(testResult.output, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {testResult.error && (
+                <div>
+                  <label className="block text-xs font-medium text-red-600 mb-1">错误</label>
+                  <pre className="bg-white rounded p-2 text-sm text-red-700 overflow-x-auto whitespace-pre-wrap">
+                    {testResult.error}
+                  </pre>
+                </div>
+              )}
+              {testResult.screenshots && testResult.screenshots.length > 0 && (
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">截图</label>
+                  <div className="space-y-2">
+                    {testResult.screenshots.map((screenshot, index) => (
+                      <img
+                        key={index}
+                        src={`data:image/png;base64,${screenshot}`}
+                        alt={`Screenshot ${index + 1}`}
+                        className="w-full rounded border border-slate-200"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

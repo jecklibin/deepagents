@@ -39,6 +39,12 @@ const ViewIcon = () => (
   </svg>
 );
 
+const PlayIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8 19V5l11 7z" fill="currentColor"/>
+  </svg>
+);
+
 const EditIcon = () => (
   <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
     <path d="M5 19h1.425L16.2 9.225L14.775 7.8L5 17.575zm-2 2v-4.25L16.2 3.575q.3-.275.663-.425t.762-.15t.775.15t.65.45L20.425 5q.3.275.438.65T21 6.4q0 .4-.137.763t-.438.662L7.25 21zM19 6.4L17.6 5zm-3.525 2.125l-.7-.725L16.2 9.225z" fill="currentColor"/>
@@ -47,7 +53,9 @@ const EditIcon = () => (
 
 const SkillsSidebar = () => {
   const { activeTab, setActiveTab, openCreateSkillModal, openSkillDetailModal } = useAppStore();
-  const { skills, selectedSkill, loading, fetchSkills, selectSkill, deleteSkill } = useSkillsStore();
+  const { skills, selectedSkill, loading, fetchSkills, selectSkill, deleteSkill, testSkill } = useSkillsStore();
+  const [testingSkill, setTestingSkill] = React.useState(null);
+  const [testResult, setTestResult] = React.useState(null);
 
   useEffect(() => {
     fetchSkills();
@@ -80,6 +88,24 @@ const SkillsSidebar = () => {
     e.stopPropagation();
     await selectSkill(skillName);
     openSkillDetailModal('edit');
+  };
+
+  const handleTestSkill = async (e, skillName) => {
+    e.stopPropagation();
+    setTestingSkill(skillName);
+    setTestResult(null);
+    try {
+      const result = await testSkill(skillName);
+      setTestResult({ skillName, ...result });
+    } catch (error) {
+      setTestResult({ skillName, success: false, error: error.message });
+    } finally {
+      setTestingSkill(null);
+    }
+  };
+
+  const closeTestResult = () => {
+    setTestResult(null);
   };
 
   return (
@@ -157,7 +183,7 @@ const SkillsSidebar = () => {
               skills.map((skill) => (
                 <div
                   key={skill.name}
-                  className={`flex items-center gap-3 p-3 rounded-xl transition-colors cursor-pointer group ${
+                  className={`flex items-start gap-3 p-3 rounded-xl transition-colors cursor-pointer group ${
                     selectedSkill?.name === skill.name
                       ? 'bg-blue-50 border border-blue-100'
                       : 'hover:bg-slate-100'
@@ -165,7 +191,7 @@ const SkillsSidebar = () => {
                   onClick={() => selectSkill(skill.name)}
                 >
                   <div
-                    className={`p-2 rounded-lg transition-colors ${
+                    className={`p-2 rounded-lg transition-colors shrink-0 ${
                       selectedSkill?.name === skill.name
                         ? 'bg-blue-600 text-white'
                         : 'bg-slate-100 group-hover:bg-white text-slate-600'
@@ -182,14 +208,27 @@ const SkillsSidebar = () => {
                       {skill.name}
                     </div>
                     <div
-                      className={`text-[10px] truncate ${
-                        selectedSkill?.name === skill.name ? 'text-blue-600 font-medium' : 'text-slate-400'
+                      className={`text-xs truncate mt-0.5 ${
+                        selectedSkill?.name === skill.name ? 'text-blue-600' : 'text-slate-500'
                       }`}
+                      title={skill.description}
                     >
-                      {skill.type === 'browser' ? '浏览器技能' : skill.type === 'manual' ? '手动技能' : '技能'}
+                      {skill.description || '暂无描述'}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                    <button
+                      className={`p-1 transition-colors ${
+                        testingSkill === skill.name
+                          ? 'text-green-500 animate-pulse'
+                          : 'text-slate-400 hover:text-green-500'
+                      }`}
+                      onClick={(e) => handleTestSkill(e, skill.name)}
+                      title="测试"
+                      disabled={testingSkill === skill.name}
+                    >
+                      <PlayIcon />
+                    </button>
                     <button
                       className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
                       onClick={(e) => handleViewSkill(e, skill.name)}
@@ -223,6 +262,84 @@ const SkillsSidebar = () => {
       {activeTab === 'market' && (
         <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
           技能市场即将上线...
+        </div>
+      )}
+
+      {/* Test Result Modal */}
+      {testResult && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={closeTestResult}>
+          <div className="bg-white rounded-xl shadow-2xl w-[500px] max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className={`px-5 py-4 flex items-center justify-between ${testResult.success ? 'bg-green-50' : 'bg-red-50'}`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${testResult.success ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+                  {testResult.success ? '✓' : '✕'}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-800">测试结果</h3>
+                  <p className="text-sm text-slate-500">{testResult.skillName}</p>
+                </div>
+              </div>
+              <button
+                className="p-1 text-slate-400 hover:text-slate-600"
+                onClick={closeTestResult}
+              >
+                <svg width="1.2em" height="1.2em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6.4 19L5 17.6l5.6-5.6L5 6.4L6.4 5l5.6 5.6L17.6 5L19 6.4L13.4 12l5.6 5.6l-1.4 1.4l-5.6-5.6z" fill="currentColor"/>
+                </svg>
+              </button>
+            </div>
+            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="flex items-center gap-4">
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${testResult.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {testResult.success ? '成功' : '失败'}
+                </div>
+                {testResult.duration_ms !== undefined && (
+                  <div className="text-sm text-slate-500">
+                    耗时: {testResult.duration_ms.toFixed(2)} ms
+                  </div>
+                )}
+              </div>
+              {testResult.output && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">输出</label>
+                  <pre className="bg-slate-100 rounded-lg p-3 text-sm text-slate-700 overflow-x-auto whitespace-pre-wrap">
+                    {typeof testResult.output === 'string' ? testResult.output : JSON.stringify(testResult.output, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {testResult.error && (
+                <div>
+                  <label className="block text-sm font-medium text-red-700 mb-1">错误</label>
+                  <pre className="bg-red-50 rounded-lg p-3 text-sm text-red-700 overflow-x-auto whitespace-pre-wrap">
+                    {testResult.error}
+                  </pre>
+                </div>
+              )}
+              {testResult.screenshots && testResult.screenshots.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">截图</label>
+                  <div className="space-y-2">
+                    {testResult.screenshots.map((screenshot, index) => (
+                      <img
+                        key={index}
+                        src={`data:image/png;base64,${screenshot}`}
+                        alt={`Screenshot ${index + 1}`}
+                        className="w-full rounded-lg border border-slate-200"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-200 flex justify-end">
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                onClick={closeTestResult}
+              >
+                关闭
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </aside>
