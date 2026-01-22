@@ -98,10 +98,21 @@ const SkillsSidebar = () => {
     openSkillDetailModal('view');
   };
 
-  const handleEditSkill = async (e, skillName) => {
+  const handleEditSkill = async (e, skill) => {
     e.stopPropagation();
-    await selectSkill(skillName);
-    openSkillDetailModal('edit');
+    const skillName = skill.name;
+    const skillType = skill.type;
+
+    // Open the appropriate builder based on skill type
+    if (skillType === 'rpa') {
+      openRPABuilderModal('edit', skillName);
+    } else if (skillType === 'hybrid') {
+      openHybridBuilderModal('edit', skillName);
+    } else {
+      // For other skill types (browser, code, nl), use the detail modal
+      await selectSkill(skillName);
+      openSkillDetailModal('edit');
+    }
   };
 
   const handleTestSkill = async (e, skillName) => {
@@ -266,7 +277,7 @@ const SkillsSidebar = () => {
                     </button>
                     <button
                       className="p-1 text-slate-400 hover:text-emerald-500 transition-colors"
-                      onClick={(e) => handleEditSkill(e, skill.name)}
+                      onClick={(e) => handleEditSkill(e, skill)}
                       title="编辑"
                     >
                       <EditIcon />

@@ -108,6 +108,7 @@ class SkillResponse(BaseModel):
     description: str
     path: str
     source: Literal["user", "project"]
+    type: str | None = None
     content: str | None = None
 
 

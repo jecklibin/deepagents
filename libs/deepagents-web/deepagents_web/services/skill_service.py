@@ -7,6 +7,8 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import yaml
+
 from deepagents_cli.config import Settings
 from deepagents_cli.skills.load import MAX_SKILL_NAME_LENGTH, list_skills
 
@@ -68,15 +70,20 @@ class SkillService:
             project_skills_dir=project_skills_dir,
         )
 
-        return [
-            SkillResponse(
-                name=s["name"],
-                description=s["description"],
-                path=s["path"],
-                source=s["source"],
+        responses: list[SkillResponse] = []
+        for s in skills:
+            skill_path = Path(s["path"])
+            skill_type = self._get_skill_type_from_path(skill_path) or "manual"
+            responses.append(
+                SkillResponse(
+                    name=s["name"],
+                    description=s["description"],
+                    path=s["path"],
+                    source=s["source"],
+                    type=skill_type,
+                )
             )
-            for s in skills
-        ]
+        return responses
 
     def get_skill(self, name: str) -> SkillResponse | None:
         """Get a skill by name with full content."""
@@ -88,6 +95,7 @@ class SkillService:
         skill_path = Path(skill.path)
         if skill_path.exists():
             skill.content = skill_path.read_text(encoding="utf-8")
+            skill.type = self._parse_skill_type(skill.content) or skill.type or "manual"
         return skill
 
     def create_skill(
@@ -126,11 +134,13 @@ class SkillService:
         skill_md = skill_dir / "SKILL.md"
         skill_md.write_text(content, encoding="utf-8")
 
+        skill_type = self._parse_skill_type(content) or "manual"
         return SkillResponse(
             name=name,
             description=description,
             path=str(skill_md),
             source="project" if project else "user",
+            type=skill_type,
             content=content,
         )
 
@@ -149,11 +159,13 @@ class SkillService:
         skill_path = Path(skill.path)
         skill_path.write_text(content, encoding="utf-8")
 
+        skill_type = self._parse_skill_type(content) or "manual"
         return SkillResponse(
             name=name,
             description=description or skill.description,
             path=skill.path,
             source=skill.source,
+            type=skill_type,
             content=content,
         )
 
@@ -215,6 +227,37 @@ description: {description}
 - [Best practice 1]
 - [Best practice 2]
 """
+
+    def _parse_skill_type(self, content: str | None) -> str | None:
+        """Parse the skill type from YAML frontmatter."""
+        if not content:
+            return None
+
+        match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+        if not match:
+            return None
+
+        try:
+            frontmatter = yaml.safe_load(match.group(1))
+        except yaml.YAMLError:
+            return None
+
+        if not isinstance(frontmatter, dict):
+            return None
+
+        skill_type = frontmatter.get("type")
+        if isinstance(skill_type, str):
+            skill_type = skill_type.strip()
+            return skill_type or None
+        return None
+
+    def _get_skill_type_from_path(self, skill_path: Path) -> str | None:
+        """Read SKILL.md and return its type from frontmatter."""
+        try:
+            content = skill_path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+        return self._parse_skill_type(content)
 
     async def create_skill_from_nl(
         self,
@@ -412,11 +455,13 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
         script_py = skill_dir / "script.py"
         script_py.write_text(playwright_code, encoding="utf-8")
 
+        skill_type = self._parse_skill_type(skill_content) or "manual"
         return SkillResponse(
             name=name,
             description=description,
             path=str(skill_md),
             source="project" if project else "user",
+            type=skill_type,
             content=skill_content,
         )
 

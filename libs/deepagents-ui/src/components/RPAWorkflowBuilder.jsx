@@ -111,7 +111,7 @@ const getActionCategory = (action) => {
 };
 
 const RPAWorkflowBuilder = () => {
-  const { showRPABuilderModal, closeRPABuilderModal } = useAppStore();
+  const { showRPABuilderModal, rpaBuilderMode, editingRPASkillName, closeRPABuilderModal } = useAppStore();
   const { fetchSkills } = useSkillsStore();
   const {
     availableActions,
@@ -119,6 +119,7 @@ const RPAWorkflowBuilder = () => {
     workflow,
     selectedActionIndex,
     validationErrors,
+    isEditing,
     fetchActions,
     setWorkflowName,
     setWorkflowDescription,
@@ -128,20 +129,29 @@ const RPAWorkflowBuilder = () => {
     updateActionParams,
     selectAction,
     resetWorkflow,
+    loadRPASkill,
     saveWorkflow,
   } = useRPAStore();
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState({});
 
   useEffect(() => {
     if (showRPABuilderModal) {
       fetchActions();
-      resetWorkflow();
+      if (rpaBuilderMode === 'edit' && editingRPASkillName) {
+        setLoading(true);
+        loadRPASkill(editingRPASkillName)
+          .catch(err => setSaveError(err.message))
+          .finally(() => setLoading(false));
+      } else {
+        resetWorkflow();
+      }
     }
-  }, [showRPABuilderModal, fetchActions, resetWorkflow]);
+  }, [showRPABuilderModal, rpaBuilderMode, editingRPASkillName, fetchActions, resetWorkflow, loadRPASkill]);
 
   // Group actions by category
   const groupedActions = React.useMemo(() => {

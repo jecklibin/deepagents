@@ -10,7 +10,8 @@ export const createAppStore = () => create((set) => ({
   showSkillDetailModal: false,
   skillDetailMode: 'view',
   showRPABuilderModal: false,
-  rpaBuilderConfig: null,  // Config for embedded RPA builder
+  rpaBuilderMode: 'create',
+  editingRPASkillName: null,
   showHybridBuilderModal: false,
   hybridBuilderMode: 'create',
   editingHybridSkillName: null,
@@ -33,8 +34,16 @@ export const createAppStore = () => create((set) => ({
   openSkillDetailModal: (mode = 'view') => set({ showSkillDetailModal: true, skillDetailMode: mode }),
   closeSkillDetailModal: () => set({ showSkillDetailModal: false, skillDetailMode: 'view' }),
 
-  openRPABuilderModal: (config = null) => set({ showRPABuilderModal: true, rpaBuilderConfig: config }),
-  closeRPABuilderModal: () => set({ showRPABuilderModal: false, rpaBuilderConfig: null }),
+  openRPABuilderModal: (mode = 'create', skillName = null) => set({
+    showRPABuilderModal: true,
+    rpaBuilderMode: mode,
+    editingRPASkillName: skillName,
+  }),
+  closeRPABuilderModal: () => set({
+    showRPABuilderModal: false,
+    rpaBuilderMode: 'create',
+    editingRPASkillName: null,
+  }),
 
   openHybridBuilderModal: (mode = 'create', skillName = null) => set({
     showHybridBuilderModal: true,

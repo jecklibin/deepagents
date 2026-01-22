@@ -74,6 +74,7 @@ class RPASkillService:
             description=workflow.description,
             path=str(skill_md),
             source="project" if project else "user",
+            type="rpa",
             content=skill_content,
         )
 
@@ -151,6 +152,7 @@ class RPASkillService:
             description=workflow.description,
             path=str(skill_md),
             source=skill.source,
+            type="rpa",
             content=skill_content,
         )
 

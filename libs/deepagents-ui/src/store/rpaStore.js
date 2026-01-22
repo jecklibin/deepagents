@@ -21,6 +21,10 @@ export const createRPAStore = (apiService) => create((set, get) => ({
   // Validation state
   validationErrors: [],
 
+  // Editing mode
+  isEditing: false,
+  editingSkillName: null,
+
   // Fetch available RPA actions from backend
   fetchActions: async () => {
     set({ actionsLoading: true, actionsError: null });
@@ -178,9 +182,11 @@ export const createRPAStore = (apiService) => create((set, get) => ({
     },
     selectedActionIndex: null,
     validationErrors: [],
+    isEditing: false,
+    editingSkillName: null,
   }),
 
-  // Load existing workflow for editing
+  // Load existing workflow for editing (from local data)
   loadWorkflow: (workflowData) => set({
     workflow: {
       name: workflowData.name || '',
@@ -192,9 +198,53 @@ export const createRPAStore = (apiService) => create((set, get) => ({
     validationErrors: [],
   }),
 
-  // Save workflow (create RPA skill)
+  // Load RPA skill from backend for editing
+  loadRPASkill: async (skillName) => {
+    try {
+      const response = await apiService.getRPASkill(skillName);
+      const { skill, workflow } = response;
+
+      if (!workflow) {
+        throw new Error('该技能没有工作流配置');
+      }
+
+      // Convert backend format to frontend format
+      const actions = (workflow.actions || []).map((action, index) => ({
+        id: action.id || `action_${index}`,
+        type: action.type,
+        params: (action.params || []).reduce((acc, p) => {
+          acc[p.key] = p.value;
+          return acc;
+        }, {}),
+      }));
+
+      const parameters = (workflow.input_params || []).map(p => ({
+        name: p.key,
+        type: p.type || 'string',
+        default: p.value || '',
+      }));
+
+      set({
+        workflow: {
+          name: workflow.name || skillName,
+          description: workflow.description || '',
+          actions,
+          parameters,
+        },
+        selectedActionIndex: null,
+        validationErrors: [],
+        isEditing: true,
+        editingSkillName: skillName,
+      });
+    } catch (error) {
+      console.error('Failed to load RPA skill:', error);
+      throw error;
+    }
+  },
+
+  // Save workflow (create or update RPA skill)
   saveWorkflow: async () => {
-    const { workflow, validateWorkflow } = get();
+    const { workflow, validateWorkflow, isEditing, editingSkillName } = get();
 
     if (!validateWorkflow()) {
       throw new Error('工作流验证失败');
@@ -211,23 +261,30 @@ export const createRPAStore = (apiService) => create((set, get) => ({
       })),
     }));
 
-    const skillData = {
+    const workflowData = {
       name: workflow.name,
-      workflow: {
-        name: workflow.name,
-        description: workflow.description,
-        version: '1.0',
-        actions: formattedActions,
-        input_params: workflow.parameters.map(p => ({
-          key: p.name,
-          value: p.default || '',
-          type: p.type || 'string',
-        })),
-        output_params: [],
-      },
+      description: workflow.description,
+      version: '1.0',
+      actions: formattedActions,
+      input_params: workflow.parameters.map(p => ({
+        key: p.name,
+        value: p.default || '',
+        type: p.type || 'string',
+      })),
+      output_params: [],
     };
 
-    return await apiService.createRPASkill(skillData);
+    if (isEditing && editingSkillName) {
+      // Update existing skill
+      return await apiService.updateRPASkill(editingSkillName, workflowData);
+    } else {
+      // Create new skill
+      const skillData = {
+        name: workflow.name,
+        workflow: workflowData,
+      };
+      return await apiService.createRPASkill(skillData);
+    }
   },
 
   // Clear errors
