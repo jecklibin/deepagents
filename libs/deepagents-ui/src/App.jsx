@@ -6,6 +6,7 @@ import ExecutionPanel from './components/ExecutionPanel';
 import RiskModal from './components/RiskModal';
 import RecordingModal from './components/RecordingModal';
 import SkillDetailModal from './components/SkillDetailModal';
+import RPAWorkflowBuilder from './components/RPAWorkflowBuilder';
 import { useAppStore } from './store/appStore';
 import { useSkillsStore } from './store/skillsStore';
 
@@ -53,6 +54,7 @@ const DeepAgentsApp = ({ apiService, title = 'DeepAgents', version = 'v1.0.0' })
       />
       <RecordingModal />
       <SkillDetailModal />
+      <RPAWorkflowBuilder />
     </div>
   );
 };

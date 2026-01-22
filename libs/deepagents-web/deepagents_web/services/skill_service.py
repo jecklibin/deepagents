@@ -515,9 +515,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
         variable = action.variable_name or action.output_key or "extracted_html"
         return f"{index}. Extract HTML from {selector} into {variable}"
 
-    def _describe_extract_attribute_action(
-        self, index: int, action: RecordedAction
-    ) -> str:
+    def _describe_extract_attribute_action(self, index: int, action: RecordedAction) -> str:
         selector = action.selector or action.xpath or ""
         variable = action.variable_name or action.output_key or "extracted"
         attr = action.attribute_name or "attribute"

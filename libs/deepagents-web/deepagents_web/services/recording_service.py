@@ -682,9 +682,7 @@ class RecordingService:
         self._queue.put(("preview", (actions, profile_id), future))
         return await future
 
-    def _do_preview(
-        self, actions: list[dict[str, Any]], profile_id: str | None
-    ) -> dict[str, Any]:
+    def _do_preview(self, actions: list[dict[str, Any]], profile_id: str | None) -> dict[str, Any]:
         """Execute preview (runs in worker thread)."""
         if self._browser is None:
             msg = "Browser not initialized"
@@ -916,9 +914,7 @@ class RecordingService:
         if locator and attribute_name:
             data = locator.get_attribute(attribute_name)
             output_key = (
-                action.get("variable_name")
-                or action.get("output_key")
-                or "extracted_attribute"
+                action.get("variable_name") or action.get("output_key") or "extracted_attribute"
             )
             ctx[output_key] = data
             return data

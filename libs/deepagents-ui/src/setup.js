@@ -4,6 +4,7 @@ import { createWsService } from './services/websocket';
 import { initSkillsStore } from './store/skillsStore';
 import { initChatStore } from './store/chatStore';
 import { initRecordingStore } from './store/recordingStore';
+import { initRPAStore } from './store/rpaStore';
 
 let initialized = false;
 let services = null;
@@ -31,6 +32,7 @@ export const initDeepAgentsUI = (config = {}) => {
   const skillsStore = initSkillsStore(apiService);
   const chatStore = initChatStore(wsService);
   const recordingStore = initRecordingStore(apiService, wsService);
+  const rpaStore = initRPAStore(apiService);
 
   services = {
     apiService,
@@ -39,6 +41,7 @@ export const initDeepAgentsUI = (config = {}) => {
       skills: skillsStore,
       chat: chatStore,
       recording: recordingStore,
+      rpa: rpaStore,
     },
   };
 

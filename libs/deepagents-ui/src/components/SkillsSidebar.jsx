@@ -51,8 +51,14 @@ const EditIcon = () => (
   </svg>
 );
 
+const RobotIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5" fill="currentColor"/>
+  </svg>
+);
+
 const SkillsSidebar = () => {
-  const { activeTab, setActiveTab, openCreateSkillModal, openSkillDetailModal } = useAppStore();
+  const { activeTab, setActiveTab, openCreateSkillModal, openSkillDetailModal, openRPABuilderModal } = useAppStore();
   const { skills, selectedSkill, loading, fetchSkills, selectSkill, deleteSkill, testSkill } = useSkillsStore();
   const [testingSkill, setTestingSkill] = React.useState(null);
   const [testResult, setTestResult] = React.useState(null);
@@ -64,6 +70,7 @@ const SkillsSidebar = () => {
   const getSkillIcon = (skill) => {
     if (skill.type === 'browser') return <BrowserIcon />;
     if (skill.type === 'code') return <CodeIcon />;
+    if (skill.type === 'rpa') return <RobotIcon />;
     return <DescriptionIcon />;
   };
 
@@ -165,6 +172,13 @@ const SkillsSidebar = () => {
                 >
                   <CodeIcon />
                   手动创建
+                </button>
+                <button
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                  onClick={() => openRPABuilderModal()}
+                >
+                  <RobotIcon />
+                  RPA工作流
                 </button>
               </div>
             </div>

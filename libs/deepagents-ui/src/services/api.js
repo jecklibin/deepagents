@@ -8,6 +8,8 @@ export function createApiService(config = {}) {
     browserProfiles: '/api/browsers/profiles',
     recordingPreview: '/api/recording/preview',
     sessions: '/api/sessions',
+    rpaActions: '/api/rpa/actions',
+    rpaSkills: '/api/rpa/skills',
     ...config.endpoints
   };
 
@@ -126,6 +128,36 @@ export function createApiService(config = {}) {
     async deleteSession(id) {
       return request(`${endpoints.sessions}/${id}`, {
         method: 'DELETE',
+      });
+    },
+
+    // RPA API
+    async getRPAActions() {
+      return request(endpoints.rpaActions);
+    },
+
+    async createRPASkill(skillData) {
+      return request(endpoints.rpaSkills, {
+        method: 'POST',
+        body: JSON.stringify(skillData),
+      });
+    },
+
+    async getRPASkill(name) {
+      return request(`${endpoints.rpaSkills}/${encodeURIComponent(name)}`);
+    },
+
+    async updateRPASkill(name, skillData) {
+      return request(`${endpoints.rpaSkills}/${encodeURIComponent(name)}`, {
+        method: 'PUT',
+        body: JSON.stringify(skillData),
+      });
+    },
+
+    async executeRPASkill(name, params = {}) {
+      return request(`${endpoints.rpaSkills}/${encodeURIComponent(name)}/execute`, {
+        method: 'POST',
+        body: JSON.stringify(params),
       });
     },
   };

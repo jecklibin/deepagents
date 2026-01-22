@@ -9,6 +9,7 @@ export const createAppStore = () => create((set) => ({
   createSkillMode: null,
   showSkillDetailModal: false,
   skillDetailMode: 'view',
+  showRPABuilderModal: false,
 
   // System status
   systemStatus: 'online',
@@ -25,6 +26,9 @@ export const createAppStore = () => create((set) => ({
 
   openSkillDetailModal: (mode = 'view') => set({ showSkillDetailModal: true, skillDetailMode: mode }),
   closeSkillDetailModal: () => set({ showSkillDetailModal: false, skillDetailMode: 'view' }),
+
+  openRPABuilderModal: () => set({ showRPABuilderModal: true }),
+  closeRPABuilderModal: () => set({ showRPABuilderModal: false }),
 
   setSystemStatus: (status) => set({ systemStatus: status }),
   setApiConnected: (connected) => set({ apiConnected: connected }),

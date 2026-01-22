@@ -32,6 +32,8 @@ class SkillExecutor:
         start_time = time.time()
 
         try:
+            if skill.content and self._is_rpa_skill(skill.content):
+                return await self._execute_rpa_skill(skill, start_time)
             if skill.content and self._is_browser_skill(skill.content):
                 return await self._execute_browser_skill(skill, start_time)
             return await self._execute_manual_skill(skill, start_time)
@@ -41,6 +43,19 @@ class SkillExecutor:
                 duration_ms=(time.time() - start_time) * 1000,
                 error=str(e),
             )
+
+    def _is_rpa_skill(self, content: str | None) -> bool:
+        """Check if skill is an RPA skill."""
+        if not content:
+            return False
+        match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+        if match:
+            try:
+                frontmatter = yaml.safe_load(match.group(1))
+                return frontmatter.get("type") == "rpa"
+            except yaml.YAMLError:
+                pass
+        return False
 
     def _is_browser_skill(self, content: str | None) -> bool:
         """Check if skill is a browser skill."""
@@ -122,9 +137,7 @@ class SkillExecutor:
 
         try:
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                self._executor, self._run_script_file, script_path
-            )
+            result = await loop.run_in_executor(self._executor, self._run_script_file, script_path)
 
             # Format the result as readable output
             output = self._format_result(result)
@@ -139,6 +152,58 @@ class SkillExecutor:
                 success=False,
                 duration_ms=(time.time() - start_time) * 1000,
                 error=f"Execution failed: {e}",
+            )
+
+    async def _execute_rpa_skill(self, skill: SkillResponse, start_time: float) -> SkillTestResult:
+        """Execute RPA skill using workflow.json file."""
+        if not skill.path:
+            return SkillTestResult(
+                success=False,
+                duration_ms=(time.time() - start_time) * 1000,
+                error="Skill has no path",
+            )
+
+        skill_dir = Path(skill.path).parent
+        workflow_path = skill_dir / "workflow.json"
+
+        if not workflow_path.exists():
+            return SkillTestResult(
+                success=False,
+                duration_ms=(time.time() - start_time) * 1000,
+                error=f"Workflow file not found: {workflow_path}",
+            )
+
+        try:
+            from deepagents_web.models.rpa import RPAWorkflow
+            from deepagents_web.rpa.engine import RPAEngine
+
+            # Load workflow
+            workflow_data = json.loads(workflow_path.read_text(encoding="utf-8"))
+            workflow = RPAWorkflow.model_validate(workflow_data)
+
+            # Execute in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            engine = RPAEngine()
+            result = await loop.run_in_executor(self._executor, engine.execute, workflow, {})
+
+            # Format output
+            if result.success:
+                output = json.dumps(result.output, indent=2, ensure_ascii=False)
+                return SkillTestResult(
+                    success=True,
+                    duration_ms=(time.time() - start_time) * 1000,
+                    output=output,
+                )
+            return SkillTestResult(
+                success=False,
+                duration_ms=(time.time() - start_time) * 1000,
+                error=result.error or "RPA execution failed",
+            )
+        except Exception as e:  # noqa: BLE001
+            return SkillTestResult(
+                success=False,
+                duration_ms=(time.time() - start_time) * 1000,
+                error=f"RPA execution failed: {e}",
             )
 
     def _format_result(self, result: dict[str, Any]) -> str:
@@ -192,9 +257,7 @@ class SkillExecutor:
             return True
         return False
 
-    def _format_content(
-        self, result: dict[str, Any], output_parts: list[str]
-    ) -> None:
+    def _format_content(self, result: dict[str, Any], output_parts: list[str]) -> None:
         """Format content section."""
         content = result.get("content")
         if not content:
@@ -209,9 +272,7 @@ class SkillExecutor:
                 else:
                     output_parts.append(str(item)[:1000])
 
-    def _format_tables(
-        self, result: dict[str, Any], output_parts: list[str]
-    ) -> None:
+    def _format_tables(self, result: dict[str, Any], output_parts: list[str]) -> None:
         """Format tables section."""
         tables = result.get("tables")
         if not tables or not isinstance(tables, list):
@@ -226,9 +287,7 @@ class SkillExecutor:
                     else:
                         output_parts.append(str(row))
 
-    def _format_lists(
-        self, result: dict[str, Any], output_parts: list[str]
-    ) -> None:
+    def _format_lists(self, result: dict[str, Any], output_parts: list[str]) -> None:
         """Format lists section."""
         lists = result.get("lists")
         if not lists or not isinstance(lists, list):
@@ -240,9 +299,7 @@ class SkillExecutor:
             else:
                 output_parts.append(f"  • {lst}")
 
-    def _format_links(
-        self, result: dict[str, Any], output_parts: list[str]
-    ) -> None:
+    def _format_links(self, result: dict[str, Any], output_parts: list[str]) -> None:
         """Format links section."""
         links = result.get("links")
         if not links or not isinstance(links, list):

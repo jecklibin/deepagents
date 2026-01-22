@@ -52,9 +52,7 @@ async def _handle_start(
     def on_action(action: RecordedAction) -> None:
         task = asyncio.create_task(
             websocket.send_json(
-                RecordingWebSocketMessage(
-                    type="action", data=action.model_dump()
-                ).model_dump()
+                RecordingWebSocketMessage(type="action", data=action.model_dump()).model_dump()
             )
         )
         _background_tasks.add(task)
@@ -107,9 +105,7 @@ async def _handle_stop(
     session_id = data.get("session_id") or current_session_id
     if not session_id:
         await websocket.send_json(
-            RecordingWebSocketMessage(
-                type="error", data="No active recording session"
-            ).model_dump()
+            RecordingWebSocketMessage(type="error", data="No active recording session").model_dump()
         )
         return
 

@@ -83,9 +83,7 @@ class BrowserService:
             name=data["name"],
             created_at=datetime.fromisoformat(data["created_at"]),
             last_used_at=(
-                datetime.fromisoformat(data["last_used_at"])
-                if data.get("last_used_at")
-                else None
+                datetime.fromisoformat(data["last_used_at"]) if data.get("last_used_at") else None
             ),
             storage_state_path=str(storage_state_path) if storage_state_path.exists() else None,
         )

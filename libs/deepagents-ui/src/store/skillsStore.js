@@ -117,6 +117,21 @@ export const createSkillsStore = (apiService) => create((set, get) => ({
     }
   },
 
+  createRPASkill: async (skillData) => {
+    set({ loading: true, error: null });
+    try {
+      const skill = await apiService.createRPASkill(skillData);
+      set((state) => ({
+        skills: [...state.skills, { ...skill, type: 'rpa' }],
+        loading: false,
+      }));
+      return skill;
+    } catch (error) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
   clearError: () => set({ error: null }),
 }));
 
