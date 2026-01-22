@@ -57,8 +57,14 @@ const RobotIcon = () => (
   </svg>
 );
 
+const HybridIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M22 11V3h-7v3H9V3H2v8h7V8h2v10h4v3h7v-8h-7v3h-2V8h2v3z" fill="currentColor"/>
+  </svg>
+);
+
 const SkillsSidebar = () => {
-  const { activeTab, setActiveTab, openCreateSkillModal, openSkillDetailModal, openRPABuilderModal } = useAppStore();
+  const { activeTab, setActiveTab, openCreateSkillModal, openSkillDetailModal, openRPABuilderModal, openHybridBuilderModal } = useAppStore();
   const { skills, selectedSkill, loading, fetchSkills, selectSkill, deleteSkill, testSkill } = useSkillsStore();
   const [testingSkill, setTestingSkill] = React.useState(null);
   const [testResult, setTestResult] = React.useState(null);
@@ -71,6 +77,7 @@ const SkillsSidebar = () => {
     if (skill.type === 'browser') return <BrowserIcon />;
     if (skill.type === 'code') return <CodeIcon />;
     if (skill.type === 'rpa') return <RobotIcon />;
+    if (skill.type === 'hybrid') return <HybridIcon />;
     return <DescriptionIcon />;
   };
 
@@ -179,6 +186,13 @@ const SkillsSidebar = () => {
                 >
                   <RobotIcon />
                   RPA工作流
+                </button>
+                <button
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2"
+                  onClick={() => openHybridBuilderModal()}
+                >
+                  <HybridIcon />
+                  混合技能
                 </button>
               </div>
             </div>

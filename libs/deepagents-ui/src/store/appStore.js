@@ -10,6 +10,12 @@ export const createAppStore = () => create((set) => ({
   showSkillDetailModal: false,
   skillDetailMode: 'view',
   showRPABuilderModal: false,
+  rpaBuilderConfig: null,  // Config for embedded RPA builder
+  showHybridBuilderModal: false,
+  hybridBuilderMode: 'create',
+  editingHybridSkillName: null,
+  showRecordingModal: false,
+  recordingConfig: null,  // Config for embedded recording
 
   // System status
   systemStatus: 'online',
@@ -27,8 +33,22 @@ export const createAppStore = () => create((set) => ({
   openSkillDetailModal: (mode = 'view') => set({ showSkillDetailModal: true, skillDetailMode: mode }),
   closeSkillDetailModal: () => set({ showSkillDetailModal: false, skillDetailMode: 'view' }),
 
-  openRPABuilderModal: () => set({ showRPABuilderModal: true }),
-  closeRPABuilderModal: () => set({ showRPABuilderModal: false }),
+  openRPABuilderModal: (config = null) => set({ showRPABuilderModal: true, rpaBuilderConfig: config }),
+  closeRPABuilderModal: () => set({ showRPABuilderModal: false, rpaBuilderConfig: null }),
+
+  openHybridBuilderModal: (mode = 'create', skillName = null) => set({
+    showHybridBuilderModal: true,
+    hybridBuilderMode: mode,
+    editingHybridSkillName: skillName,
+  }),
+  closeHybridBuilderModal: () => set({
+    showHybridBuilderModal: false,
+    hybridBuilderMode: 'create',
+    editingHybridSkillName: null,
+  }),
+
+  openRecordingModal: (config = null) => set({ showRecordingModal: true, recordingConfig: config }),
+  closeRecordingModal: () => set({ showRecordingModal: false, recordingConfig: null }),
 
   setSystemStatus: (status) => set({ systemStatus: status }),
   setApiConnected: (connected) => set({ apiConnected: connected }),

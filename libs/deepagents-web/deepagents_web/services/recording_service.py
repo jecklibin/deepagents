@@ -958,3 +958,66 @@ class RecordingService:
         if variable_name:
             ctx[variable_name] = result
         return result
+
+    def execute_actions(
+        self,
+        actions: list[dict[str, Any]],
+        start_url: str | None = None,
+        inputs: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Execute recorded actions synchronously (for hybrid skill execution).
+
+        This method runs in a thread pool and executes the recorded actions
+        in a headless browser context.
+
+        Args:
+            actions: List of recorded actions to execute
+            start_url: Optional starting URL
+            inputs: Optional input variables to pass to the execution context
+
+        Returns:
+            Dictionary with execution results including extracted data
+        """
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            context = browser.new_context()
+            page = context.new_page()
+
+            try:
+                # Initialize context with inputs
+                ctx: dict[str, Any] = inputs.copy() if inputs else {}
+
+                # Navigate to start URL if provided
+                if start_url:
+                    page.goto(start_url, wait_until="domcontentloaded")
+
+                # Execute each action
+                for idx, action in enumerate(actions, start=1):
+                    try:
+                        self._execute_action(page, action, ctx)
+                    except Exception as exc:
+                        action_type = action.get("type", "unknown")
+                        logger.warning(f"Action {idx} ({action_type}) failed: {exc}")
+                        # Continue with next action unless it's critical
+                        if action_type in ("navigate",):
+                            raise
+
+                result = {
+                    "success": True,
+                    "url": page.url,
+                    "title": page.title(),
+                    "extracted": ctx,
+                }
+            except Exception as exc:
+                result = {
+                    "success": False,
+                    "error": str(exc),
+                    "extracted": ctx if "ctx" in locals() else {},
+                }
+            finally:
+                context.close()
+                browser.close()
+
+            return result

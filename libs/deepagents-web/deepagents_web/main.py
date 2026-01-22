@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from deepagents_web.api import browsers, chat, recording, rpa, sessions, skills
+from deepagents_web.api import browsers, chat, hybrid, recording, rpa, sessions, skills
 from deepagents_web.config import web_settings
 
 app = FastAPI(
@@ -32,6 +32,7 @@ app.include_router(sessions.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(recording.router, prefix="/api")
 app.include_router(rpa.router, prefix="/api")
+app.include_router(hybrid.router, prefix="/api")
 
 # Mount static files
 static_dir = Path(__file__).parent / "static"

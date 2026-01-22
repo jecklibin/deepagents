@@ -27,15 +27,18 @@ class SkillExecutor:
         """Initialize the skill executor."""
         self._executor = ThreadPoolExecutor(max_workers=1)
 
-    async def execute_skill(self, skill: SkillResponse) -> SkillTestResult:
+    async def execute_skill(self, skill: SkillResponse, inputs: dict[str, Any] | None = None) -> SkillTestResult:
         """Execute a skill and return results."""
         start_time = time.time()
+        inputs = inputs or {}
 
         try:
+            if skill.content and self._is_hybrid_skill(skill.content):
+                return await self._execute_hybrid_skill(skill, start_time, inputs)
             if skill.content and self._is_rpa_skill(skill.content):
-                return await self._execute_rpa_skill(skill, start_time)
+                return await self._execute_rpa_skill(skill, start_time, inputs)
             if skill.content and self._is_browser_skill(skill.content):
-                return await self._execute_browser_skill(skill, start_time)
+                return await self._execute_browser_skill(skill, start_time, inputs)
             return await self._execute_manual_skill(skill, start_time)
         except Exception as e:  # noqa: BLE001
             return SkillTestResult(
@@ -43,6 +46,19 @@ class SkillExecutor:
                 duration_ms=(time.time() - start_time) * 1000,
                 error=str(e),
             )
+
+    def _is_hybrid_skill(self, content: str | None) -> bool:
+        """Check if skill is a hybrid skill."""
+        if not content:
+            return False
+        match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+        if match:
+            try:
+                frontmatter = yaml.safe_load(match.group(1))
+                return frontmatter.get("type") == "hybrid"
+            except yaml.YAMLError:
+                pass
+        return False
 
     def _is_rpa_skill(self, content: str | None) -> bool:
         """Check if skill is an RPA skill."""
@@ -70,10 +86,15 @@ class SkillExecutor:
                 pass
         return False
 
-    def _run_script_file(self, script_path: Path) -> dict[str, Any]:
+    def _run_script_file(self, script_path: Path, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
         """Run script.py file and capture output."""
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
+
+        # Pass inputs as environment variables
+        if inputs:
+            for key, value in inputs.items():
+                env[f"HYBRID_INPUT_{key.upper()}"] = json.dumps(value) if not isinstance(value, str) else value
 
         # Use Popen for better control over encoding on Windows
         # Security: script_path is validated to be within skill directory
@@ -115,7 +136,7 @@ class SkillExecutor:
             return {"message": stdout[:2000], "parse_error": str(e)}
 
     async def _execute_browser_skill(
-        self, skill: SkillResponse, start_time: float
+        self, skill: SkillResponse, start_time: float, inputs: dict[str, Any]
     ) -> SkillTestResult:
         """Execute browser skill using script.py file."""
         if not skill.path:
@@ -137,7 +158,9 @@ class SkillExecutor:
 
         try:
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(self._executor, self._run_script_file, script_path)
+            result = await loop.run_in_executor(
+                self._executor, self._run_script_file, script_path, inputs
+            )
 
             # Format the result as readable output
             output = self._format_result(result)
@@ -154,7 +177,7 @@ class SkillExecutor:
                 error=f"Execution failed: {e}",
             )
 
-    async def _execute_rpa_skill(self, skill: SkillResponse, start_time: float) -> SkillTestResult:
+    async def _execute_rpa_skill(self, skill: SkillResponse, start_time: float, inputs: dict[str, Any]) -> SkillTestResult:
         """Execute RPA skill using workflow.json file."""
         if not skill.path:
             return SkillTestResult(
@@ -184,7 +207,7 @@ class SkillExecutor:
             # Execute in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
             engine = RPAEngine()
-            result = await loop.run_in_executor(self._executor, engine.execute, workflow, {})
+            result = await loop.run_in_executor(self._executor, engine.execute, workflow, inputs)
 
             # Format output
             if result.success:
@@ -204,6 +227,59 @@ class SkillExecutor:
                 success=False,
                 duration_ms=(time.time() - start_time) * 1000,
                 error=f"RPA execution failed: {e}",
+            )
+
+    async def _execute_hybrid_skill(
+        self, skill: SkillResponse, start_time: float, inputs: dict[str, Any]
+    ) -> SkillTestResult:
+        """Execute hybrid skill using definition.json file."""
+        if not skill.path:
+            return SkillTestResult(
+                success=False,
+                duration_ms=(time.time() - start_time) * 1000,
+                error="Skill has no path",
+            )
+
+        skill_dir = Path(skill.path).parent
+        definition_path = skill_dir / "definition.json"
+
+        if not definition_path.exists():
+            return SkillTestResult(
+                success=False,
+                duration_ms=(time.time() - start_time) * 1000,
+                error=f"Definition file not found: {definition_path}",
+            )
+
+        try:
+            from deepagents_web.models.hybrid import HybridSkillDefinition
+            from deepagents_web.services.hybrid_executor import HybridSkillExecutor
+
+            # Load definition
+            definition_data = json.loads(definition_path.read_text(encoding="utf-8"))
+            definition = HybridSkillDefinition.model_validate(definition_data)
+
+            # Execute hybrid skill
+            executor = HybridSkillExecutor()
+            result = await executor.execute(definition, inputs, skill.path)
+
+            # Format output
+            if result.success:
+                output = json.dumps(result.output, indent=2, ensure_ascii=False)
+                return SkillTestResult(
+                    success=True,
+                    duration_ms=(time.time() - start_time) * 1000,
+                    output=output,
+                )
+            return SkillTestResult(
+                success=False,
+                duration_ms=(time.time() - start_time) * 1000,
+                error=result.error or "Hybrid skill execution failed",
+            )
+        except Exception as e:  # noqa: BLE001
+            return SkillTestResult(
+                success=False,
+                duration_ms=(time.time() - start_time) * 1000,
+                error=f"Hybrid skill execution failed: {e}",
             )
 
     def _format_result(self, result: dict[str, Any]) -> str:

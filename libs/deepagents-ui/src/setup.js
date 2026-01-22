@@ -5,6 +5,7 @@ import { initSkillsStore } from './store/skillsStore';
 import { initChatStore } from './store/chatStore';
 import { initRecordingStore } from './store/recordingStore';
 import { initRPAStore } from './store/rpaStore';
+import { initHybridStore } from './store/hybridStore';
 
 let initialized = false;
 let services = null;
@@ -33,6 +34,7 @@ export const initDeepAgentsUI = (config = {}) => {
   const chatStore = initChatStore(wsService);
   const recordingStore = initRecordingStore(apiService, wsService);
   const rpaStore = initRPAStore(apiService);
+  const hybridStore = initHybridStore(apiService);
 
   services = {
     apiService,
@@ -42,6 +44,7 @@ export const initDeepAgentsUI = (config = {}) => {
       chat: chatStore,
       recording: recordingStore,
       rpa: rpaStore,
+      hybrid: hybridStore,
     },
   };
 

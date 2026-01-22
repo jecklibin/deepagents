@@ -10,6 +10,7 @@ export { default as RiskModal } from './components/RiskModal';
 export { default as RecordingModal } from './components/RecordingModal';
 export { default as SkillDetailModal } from './components/SkillDetailModal';
 export { default as RPAWorkflowBuilder } from './components/RPAWorkflowBuilder';
+export { default as HybridSkillBuilder } from './components/HybridSkillBuilder';
 
 // Stores (use after initialization)
 export { useAppStore, createAppStore } from './store/appStore';
@@ -17,6 +18,7 @@ export { useChatStore, createChatStore, initChatStore } from './store/chatStore'
 export { useSkillsStore, createSkillsStore, initSkillsStore } from './store/skillsStore';
 export { useRecordingStore, createRecordingStore, initRecordingStore } from './store/recordingStore';
 export { useRPAStore, createRPAStore, initRPAStore } from './store/rpaStore';
+export { useHybridStore, createHybridStore, initHybridStore, STEP_TYPES } from './store/hybridStore';
 
 // Services
 export { createApiService } from './services/api';

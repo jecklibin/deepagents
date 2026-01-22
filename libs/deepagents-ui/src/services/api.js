@@ -10,6 +10,8 @@ export function createApiService(config = {}) {
     sessions: '/api/sessions',
     rpaActions: '/api/rpa/actions',
     rpaSkills: '/api/rpa/skills',
+    hybridSkills: '/api/hybrid/skills',
+    hybridStepTypes: '/api/hybrid/step-types',
     ...config.endpoints
   };
 
@@ -159,6 +161,66 @@ export function createApiService(config = {}) {
         method: 'POST',
         body: JSON.stringify(params),
       });
+    },
+
+    // Hybrid Skills API
+    async getHybridSkills() {
+      return request(endpoints.hybridSkills);
+    },
+
+    async getHybridSkill(name) {
+      return request(`${endpoints.hybridSkills}/${encodeURIComponent(name)}`);
+    },
+
+    async createHybridSkill(skillData) {
+      return request(endpoints.hybridSkills, {
+        method: 'POST',
+        body: JSON.stringify(skillData),
+      });
+    },
+
+    async updateHybridSkill(name, skillData) {
+      return request(`${endpoints.hybridSkills}/${encodeURIComponent(name)}`, {
+        method: 'PUT',
+        body: JSON.stringify(skillData),
+      });
+    },
+
+    async deleteHybridSkill(name) {
+      return request(`${endpoints.hybridSkills}/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+      });
+    },
+
+    async executeHybridSkill(name, params = {}) {
+      return request(`${endpoints.hybridSkills}/${encodeURIComponent(name)}/execute`, {
+        method: 'POST',
+        body: JSON.stringify({ params }),
+      });
+    },
+
+    async addHybridStep(skillName, stepData) {
+      return request(`${endpoints.hybridSkills}/${encodeURIComponent(skillName)}/steps`, {
+        method: 'POST',
+        body: JSON.stringify(stepData),
+      });
+    },
+
+    async removeHybridStep(skillName, stepId) {
+      return request(`${endpoints.hybridSkills}/${encodeURIComponent(skillName)}/steps/${encodeURIComponent(stepId)}`, {
+        method: 'DELETE',
+      });
+    },
+
+    async reorderHybridSteps(skillName, stepIds) {
+      return request(`${endpoints.hybridSkills}/${encodeURIComponent(skillName)}/steps/reorder`, {
+        method: 'PUT',
+        body: JSON.stringify(stepIds),
+      });
+    },
+
+    async getHybridStepTypes() {
+      return request(endpoints.hybridStepTypes);
     },
   };
 }
