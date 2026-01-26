@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import Header from './components/Header';
 import SkillsSidebar from './components/SkillsSidebar';
 import ChatArea from './components/ChatArea';
-import ExecutionPanel from './components/ExecutionPanel';
+import BrowserStage from './components/BrowserStage';
 import RiskModal from './components/RiskModal';
 import RecordingModal from './components/RecordingModal';
 import SkillDetailModal from './components/SkillDetailModal';
@@ -43,10 +43,10 @@ const DeepAgentsApp = ({ apiService, title = 'DeepAgents', version = 'v1.0.0' })
   return (
     <div className="bg-slate-50 text-slate-900 font-sans antialiased overflow-hidden h-screen flex flex-col">
       <Header title={title} version={version} />
-      <main className="flex-1 flex overflow-hidden">
+      <main className="flex-1 flex overflow-hidden min-w-0">
         <SkillsSidebar />
+        <BrowserStage />
         <ChatArea />
-        <ExecutionPanel />
       </main>
       <RiskModal
         isOpen={showRiskModal}

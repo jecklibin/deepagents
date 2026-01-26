@@ -74,6 +74,12 @@ class SkillService:
         for s in skills:
             skill_path = Path(s["path"])
             skill_type = self._get_skill_type_from_path(skill_path) or "manual"
+            if skill_type == "browser":
+                script_path = skill_path.parent / "script.py"
+                if script_path.exists():
+                    from deepagents_web.services.playwright_script_patch import patch_script_in_place
+
+                    patch_script_in_place(script_path)
             responses.append(
                 SkillResponse(
                     name=s["name"],
@@ -415,6 +421,13 @@ Output ONLY the Python code, no markdown code blocks, no explanations.
 
         # Clean up code if wrapped in markdown
         playwright_code = self._clean_code_block(playwright_code)
+
+        # Ensure scripts can connect to remote Playwright server when configured.
+        from deepagents_web.services.playwright_script_patch import _patch_playwright_launch
+
+        patched = _patch_playwright_launch(playwright_code)
+        if patched:
+            playwright_code = patched
 
         # Ensure proper encoding header
         if "sys.stdout" not in playwright_code:

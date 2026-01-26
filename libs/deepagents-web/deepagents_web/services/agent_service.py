@@ -64,6 +64,7 @@ class AgentService:
         *,
         auto_approve: bool = False,
         enable_cua: bool = True,
+        enable_mcp: bool = True,
         cua_model: str | None = None,
         cua_provider: str | None = None,
         cua_os: str | None = None,
@@ -73,6 +74,7 @@ class AgentService:
         self.agent_name = agent_name
         self.auto_approve = auto_approve
         self.enable_cua = enable_cua
+        self.enable_mcp = enable_mcp
         self.cua_model = cua_model
         self.cua_provider = cua_provider
         self.cua_os = cua_os
@@ -99,6 +101,7 @@ class AgentService:
             auto_approve=self.auto_approve,
             enable_shell=True,
             enable_cua=self.enable_cua,
+            enable_mcp=self.enable_mcp,
             cua_config=cua_config,
         )
 

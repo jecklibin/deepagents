@@ -7,6 +7,7 @@ export function createApiService(config = {}) {
     skillFromRecording: '/api/skills/from-recording',
     browserProfiles: '/api/browsers/profiles',
     recordingPreview: '/api/recording/preview',
+    vncConfig: '/api/vnc/config',
     sessions: '/api/sessions',
     rpaActions: '/api/rpa/actions',
     rpaSkills: '/api/rpa/skills',
@@ -113,6 +114,11 @@ export function createApiService(config = {}) {
         method: 'POST',
         body: JSON.stringify({ actions, profile_id: profileId }),
       });
+    },
+
+    // VNC config
+    async getVncConfig() {
+      return request(endpoints.vncConfig);
     },
 
     // Sessions API

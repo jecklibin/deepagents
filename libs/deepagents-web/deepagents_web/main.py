@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from deepagents_web.api import browsers, chat, hybrid, recording, rpa, sessions, skills
+from deepagents_web.api import browsers, chat, hybrid, recording, rpa, sessions, skills, vnc
 from deepagents_web.config import web_settings
 
 app = FastAPI(
@@ -33,11 +33,15 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(recording.router, prefix="/api")
 app.include_router(rpa.router, prefix="/api")
 app.include_router(hybrid.router, prefix="/api")
+app.include_router(vnc.router, prefix="/api")
 
 # Mount static files
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    vnc_dir = static_dir / "vnc"
+    if vnc_dir.exists():
+        app.mount("/vnc", StaticFiles(directory=str(vnc_dir), html=True), name="vnc")
 
 
 @app.get("/")

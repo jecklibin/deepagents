@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from playwright.sync_api import sync_playwright
-
 from deepagents_web.rpa.actions.base import ExecutionContext, action
+from deepagents_web.services.playwright_provider import open_playwright_browser
 
 
 @action(
@@ -31,18 +30,11 @@ def browser_open(
     if context.browser:
         return True
 
-    pw = sync_playwright().start()
-    context.playwright = pw
-
-    if browser_type == "firefox":
-        browser = pw.firefox.launch(headless=headless)
-    elif browser_type == "webkit":
-        browser = pw.webkit.launch(headless=headless)
-    else:
-        browser = pw.chromium.launch(headless=headless)
-
-    context.browser = browser
-    context.page = browser.new_page()
+    session = open_playwright_browser(browser_type=browser_type, headless=headless)
+    context.playwright = session.playwright
+    context.playwright_mode = session.mode
+    context.browser = session.browser
+    context.page = session.browser.new_page()
     return True
 
 

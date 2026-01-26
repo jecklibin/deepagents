@@ -6,12 +6,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize managers
     const chatManager = new ChatManager();
     const skillsManager = new SkillsManager();
+    const vncManager = new VncManager();
 
     // Connect WebSocket
     chatManager.connect();
 
     // Load skills
     skillsManager.loadSkills();
+    vncManager.init();
 
     // Tab navigation
     const navTabs = document.querySelectorAll('.nav-tab');

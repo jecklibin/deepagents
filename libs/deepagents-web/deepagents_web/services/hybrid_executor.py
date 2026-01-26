@@ -396,6 +396,13 @@ class HybridSkillExecutor:
     def _run_script(self, script_path: Path, env: dict[str, str]) -> Any:
         """Run a Python script and return parsed output."""
         import subprocess
+        from deepagents_web.services.playwright_script_patch import (
+            cleanup_patched_script,
+            prepare_script_for_remote,
+        )
+
+        temp_dir: Path | None = None
+        script_path, temp_dir = prepare_script_for_remote(script_path)
 
         process = subprocess.Popen(  # noqa: S603
             ["python", "-u", str(script_path)],  # noqa: S607
@@ -411,6 +418,8 @@ class HybridSkillExecutor:
             process.kill()
             msg = "Script execution timed out"
             raise RuntimeError(msg) from None
+        finally:
+            cleanup_patched_script(temp_dir)
 
         stdout = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
         stderr = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""

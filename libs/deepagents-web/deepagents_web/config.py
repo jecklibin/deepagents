@@ -1,10 +1,12 @@
 """Configuration for deepagents-web."""
 
 import os
+from pathlib import Path
 from dataclasses import dataclass
 
 import dotenv
 
+dotenv.load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 dotenv.load_dotenv()
 
 
@@ -21,6 +23,15 @@ class WebSettings:
     cua_provider: str | None
     cua_os: str | None
     cua_trajectory_dir: str | None
+    vnc_url: str | None
+    vnc_view_only: bool
+    vnc_ws_url: str | None
+    vnc_host: str
+    vnc_port: int
+    vnc_password: str | None
+    playwright_ws_url: str | None
+    playwright_cdp_url: str | None
+    enable_mcp: bool
 
     @classmethod
     def from_environment(cls) -> "WebSettings":
@@ -36,6 +47,19 @@ class WebSettings:
         cua_provider = _optional_env("DEEPAGENTS_WEB_CUA_PROVIDER")
         cua_os = _optional_env("DEEPAGENTS_WEB_CUA_OS")
         cua_trajectory_dir = _optional_env("DEEPAGENTS_WEB_CUA_TRAJECTORY_DIR")
+        vnc_url = _optional_env("DEEPAGENTS_WEB_VNC_URL") or "/vnc/"
+        vnc_view_only = os.getenv("DEEPAGENTS_WEB_VNC_VIEW_ONLY", "false").lower() == "true"
+        vnc_ws_url = _optional_env("DEEPAGENTS_WEB_VNC_WS_URL")
+        vnc_host = os.getenv("DEEPAGENTS_WEB_VNC_HOST", "127.0.0.1")
+        vnc_port = int(os.getenv("DEEPAGENTS_WEB_VNC_PORT", "5900"))
+        vnc_password = _optional_env("DEEPAGENTS_WEB_VNC_PASSWORD")
+        playwright_ws_url = _optional_env("DEEPAGENTS_WEB_PLAYWRIGHT_WS_URL")
+        playwright_cdp_url = _optional_env("DEEPAGENTS_WEB_PLAYWRIGHT_CDP_URL")
+        enable_mcp_env = _optional_env("DEEPAGENTS_WEB_ENABLE_MCP")
+        if enable_mcp_env is None:
+            enable_mcp = not (playwright_ws_url or playwright_cdp_url)
+        else:
+            enable_mcp = enable_mcp_env.lower() == "true"
 
         return cls(
             host=host,
@@ -47,6 +71,15 @@ class WebSettings:
             cua_provider=cua_provider,
             cua_os=cua_os,
             cua_trajectory_dir=cua_trajectory_dir,
+            vnc_url=vnc_url,
+            vnc_view_only=vnc_view_only,
+            vnc_ws_url=vnc_ws_url,
+            vnc_host=vnc_host,
+            vnc_port=vnc_port,
+            vnc_password=vnc_password,
+            playwright_ws_url=playwright_ws_url,
+            playwright_cdp_url=playwright_cdp_url,
+            enable_mcp=enable_mcp,
         )
 
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRecordingStore } from '../store/recordingStore';
 import { useSkillsStore } from '../store/skillsStore';
 import { useAppStore } from '../store/appStore';
+import VncViewer from './VncViewer';
 
 // Icons
 const CloseIcon = () => (
@@ -53,6 +54,9 @@ const RecordingModal = () => {
   const [startUrl, setStartUrl] = useState('https://');
   const [nlDescription, setNlDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const modalWidthClass = createSkillMode === 'recording'
+    ? 'w-[960px] max-w-[95vw]'
+    : 'w-[600px] max-w-[90vw]';
 
   useEffect(() => {
     if (showCreateSkillModal && createSkillMode === 'recording') {
@@ -190,7 +194,7 @@ const RecordingModal = () => {
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-white rounded-2xl w-[600px] max-h-[80vh] shadow-2xl overflow-hidden flex flex-col">
+      <div className={`bg-white rounded-2xl ${modalWidthClass} max-h-[80vh] shadow-2xl overflow-hidden flex flex-col`}>
         {/* Header */}
         <div className="p-4 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-bold text-lg">
@@ -293,6 +297,8 @@ const RecordingModal = () => {
                   {!isRecording && actions.length > 0 && <span className="ml-2 text-green-500">● 已停止</span>}
                 </div>
               )}
+
+              <VncViewer title="Remote Browser" autoConnect frameHeightClass="h-64" compact />
 
               {/* Recorded actions */}
               {actions.length > 0 && (

@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '../store/chatStore';
-import { useSkillsStore } from '../store/skillsStore';
 import ReactMarkdown from 'react-markdown';
 
 // Icons
@@ -34,33 +33,27 @@ const RobotIcon = () => (
   </svg>
 );
 
-const ArrowIcon = () => (
+const CycloneIcon = () => (
   <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="m14.475 12l-7.35-7.35q-.375-.375-.363-.888t.388-.887t.888-.375t.887.375l7.675 7.7q.3.3.45.675t.15.75t-.15.75t-.45.675l-7.7 7.7q-.375.375-.875.363T7.15 21.1t-.375-.888t.375-.887z" fill="currentColor"/>
+    <path d="M12 16q-1.65 0-2.825-1.175T8 12t1.175-2.825T12 8t2.825 1.175T16 12t-1.175 2.825T12 16m0-2q.825 0 1.413-.587T14 12t-.587-1.412T12 10t-1.412.588T10 12t.588 1.413T12 14m0 6q-2.85 0-5.087-.337t-3.788-.713q-.5-.125-.812-.488T2 17.6q0-.4.338-.638t.737-.112q1.05.275 1.863.438l1.312.262q-1.05-1.075-1.65-2.5T4 12q0-2.85.337-5.087t.713-3.788q.125-.5.488-.812T6.4 2q.4 0 .638.338t.112.737q-.3 1.05-.462 1.863T6.45 6.25Q7.525 5.2 8.95 4.6T12 4q2.85 0 5.088.337t3.787.713q.5.125.813.488T22 6.4q0 .4-.337.638t-.738.112q-1.05-.3-1.862-.462T17.75 6.45q1.05 1.075 1.65 2.5T20 12q0 2.85-.337 5.088t-.713 3.787q-.125.5-.488.813T17.6 22q-.4 0-.638-.337t-.112-.738q.275-1.05.438-1.862l.262-1.313q-1.075 1.05-2.5 1.65T12 20m0-2q2.5 0 4.25-1.75T18 12t-1.75-4.25T12 6T7.75 7.75T6 12t1.75 4.25T12 18" fill="currentColor"/>
   </svg>
 );
 
-const TreeIcon = () => (
+const CheckIcon = () => (
   <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M15 21v-3h-4V8H9v3H2V3h7v3h6V3h7v8h-7V8h-2v8h2v-3h7v8zM4 5v4zm13 10v4zm0-10v4zm0 4h3V5h-3zm0 10h3v-4h-3zM4 9h3V5H4z" fill="currentColor"/>
+    <path d="m10 16.4l-4-4L7.4 11l2.6 2.6L16.6 7L18 8.4z" fill="currentColor"/>
   </svg>
 );
 
-const DatabaseIcon = () => (
+const SettingsIcon = () => (
   <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 21q-3.775 0-6.387-1.162T3 17V7q0-1.65 2.638-2.825T12 3t6.363 1.175T21 7v10q0 1.675-2.613 2.838T12 21m0-11.975q2.225 0 4.475-.638T19 7.025q-.275-.725-2.512-1.375T12 5q-2.275 0-4.462.638T5 7.025q.35.75 2.538 1.375T12 9.025" fill="currentColor"/>
+    <path d="M3 23v-4.2q-.875-.3-1.437-1.062T1 16v-2h6v2q0 .975-.562 1.738T5 18.8V23zm8 0v-4.2q-.875-.3-1.437-1.062T9 16v-2h6v2q0 .975-.562 1.738T13 18.8V23zm8 0v-4.2q-.875-.3-1.437-1.062T17 16v-2h6v2q0 .975-.562 1.738T21 18.8V23zM1 12V6h2V2q0-.425.288-.712T4 1t.713.288T5 2v4h2v6zm8 0V6h2V2q0-.425.288-.712T12 1t.713.288T13 2v4h2v6zm8 0V6h2V2q0-.425.288-.712T20 1t.713.288T21 2v4h2v6z" fill="currentColor"/>
   </svg>
 );
 
-const DescriptionIcon = () => (
+const CleaningIcon = () => (
   <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M8 18h8v-2H8zm0-4h8v-2H8zm-2 8q-.825 0-1.412-.587T4 20V4q0-.825.588-1.412T6 2h8l6 6v12q0 .825-.587 1.413T18 22zm7-13V4H6v16h12V9z" fill="currentColor"/>
-  </svg>
-);
-
-const AddIcon = () => (
-  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M11 13H5v-2h6V5h2v6h6v2h-6v6h-2z" fill="currentColor"/>
+    <path d="M3 23v-7q0-2.075 1.463-3.537T8 11h1V3q0-.825.588-1.412T11 1h2q.825 0 1.413.588T15 3v8h1q2.075 0 3.538 1.463T21 16v7zm2-2h2v-3q0-.425.288-.712T8 17t.713.288T9 18v3h2v-3q0-.425.288-.712T12 17t.713.288T13 18v3h2v-3q0-.425.288-.712T16 17t.713.288T17 18v3h2v-5q0-1.25-.875-2.125T16 13H8q-1.25 0-2.125.875T5 16zm8-10V3h-2v8zm0 0h-2z" fill="currentColor"/>
   </svg>
 );
 
@@ -83,6 +76,7 @@ const ChatArea = () => {
     isStreaming,
     pendingInterrupt,
     todos,
+    toolCalls,
     setCurrentSession,
     addSession,
     removeSession,
@@ -92,8 +86,6 @@ const ChatArea = () => {
     stopStreaming,
     respondToInterrupt,
   } = useChatStore();
-
-  const { skills, selectedSkill } = useSkillsStore();
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -155,14 +147,55 @@ const ChatArea = () => {
     });
   };
 
-  // Get skill flow items (selected skills for orchestration)
-  const skillFlow = selectedSkill ? [selectedSkill] : skills.slice(0, 2);
+  const executionSteps = todos.map((todo, index) => ({
+    id: index,
+    title: todo.content,
+    desc: todo.activeForm || '',
+    status: todo.status,
+    progress: todo.status === 'in_progress' ? 50 : todo.status === 'completed' ? 100 : 0,
+  }));
+
+  const toolSteps = toolCalls.map((tool, index) => ({
+    id: `tool-${index}`,
+    title: `Tool: ${tool.name}`,
+    desc: tool.result
+      ? (typeof tool.result === 'string' ? tool.result.slice(0, 100) : JSON.stringify(tool.result).slice(0, 100))
+      : (typeof tool.input === 'string' ? tool.input.slice(0, 50) : JSON.stringify(tool.input).slice(0, 50)),
+    status: tool.status || 'running',
+  }));
+
+  const allSteps = [...executionSteps, ...toolSteps];
+
+  const renderStepIcon = (status) => {
+    switch (status) {
+      case 'completed':
+        return (
+          <div className="absolute left-0 top-1 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white ring-4 ring-emerald-50 z-10">
+            <CheckIcon className="text-sm" />
+          </div>
+        );
+      case 'in_progress':
+      case 'running':
+        return (
+          <div className="absolute left-0 top-1 w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white ring-4 ring-blue-50 z-10 animate-pulse-soft">
+            <SettingsIcon className="text-sm" />
+          </div>
+        );
+      case 'pending':
+      default:
+        return (
+          <div className="absolute left-0 top-1 w-6 h-6 bg-slate-200 rounded-full flex items-center justify-center text-slate-500 z-10">
+            <CleaningIcon className="text-sm" />
+          </div>
+        );
+    }
+  };
 
   return (
-    <section className="flex-1 flex flex-col bg-slate-50 relative">
+    <section className="w-[420px] bg-white border-l border-slate-200 flex flex-col shrink-0">
       {/* Task Session Management */}
       <div className="bg-white border-b border-slate-200 shrink-0">
-        <div className="p-4 flex items-center gap-4">
+        <div className="p-4 flex items-center gap-3">
           <button
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all font-medium text-sm shrink-0 shadow-sm"
             onClick={handleNewSession}
@@ -207,37 +240,68 @@ const ChatArea = () => {
         </div>
       </div>
 
-      {/* Skill Orchestration Area */}
-      <div className="bg-indigo-50/50 border-b border-indigo-100 p-3 shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-indigo-900 font-bold text-xs uppercase tracking-wider">
-            <TreeIcon />
-            AI助手 - 多技能协同编排
+      {/* Task Execution */}
+      <div className="border-b border-slate-200 bg-slate-50/70 shrink-0">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+            <CycloneIcon className="text-blue-600" />
+            Task Execution
           </div>
-          <button className="text-[10px] text-indigo-600 hover:underline">管理组件库</button>
+          {isStreaming && (
+            <span className="text-[10px] px-2 py-1 rounded bg-blue-50 text-blue-600 border border-blue-100 font-semibold animate-pulse">
+              Running
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-3 overflow-x-auto py-1">
-          {skillFlow.map((skill, index) => (
-            <React.Fragment key={skill.name}>
-              {index > 0 && <ArrowIcon className="text-slate-300" />}
-              <div className="flex items-center bg-white p-2 rounded-lg border border-indigo-200 shadow-sm">
-                {skill.type === 'browser' ? (
-                  <DatabaseIcon className="text-indigo-600 mr-2" />
-                ) : (
-                  <DescriptionIcon className="text-indigo-600 mr-2" />
-                )}
-                <span className="text-xs font-medium">{skill.name}</span>
-              </div>
-            </React.Fragment>
-          ))}
-          <button className="flex items-center justify-center w-8 h-8 rounded-lg border-2 border-dashed border-indigo-200 text-indigo-400 hover:border-indigo-400 hover:text-indigo-600 transition-all">
-            <AddIcon />
-          </button>
+        <div className="px-4 pb-4">
+          {allSteps.length === 0 ? (
+            <div className="text-xs text-slate-400">No active steps yet.</div>
+          ) : (
+            <div className="relative space-y-5 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-200">
+              {allSteps.map((step) => (
+                <div
+                  key={step.id}
+                  className={`relative flex gap-4 pl-8 ${step.status === 'pending' ? 'opacity-40' : ''}`}
+                >
+                  {renderStepIcon(step.status)}
+                  <div className="flex-1">
+                    {step.status === 'in_progress' ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-semibold text-blue-600">{step.title}</h4>
+                          <span className="text-[10px] text-blue-500">{step.progress}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                          <div
+                            className="h-full bg-blue-600 rounded-full transition-all"
+                            style={{ width: `${step.progress}%` }}
+                          />
+                        </div>
+                        {step.desc && (
+                          <p className="text-[10px] text-slate-500 mt-2 font-mono bg-white/70 p-1.5 rounded border border-slate-100 truncate">
+                            {step.desc}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <h4 className="text-xs font-semibold text-slate-700">{step.title}</h4>
+                        {step.desc && (
+                          <p className="text-[11px] text-slate-500 mt-0.5 truncate">{step.desc}</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Chat History */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar">
+
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-5 space-y-6 hide-scrollbar">
         {messages.length === 0 && currentSessionId && (
           <div className="text-center text-slate-400 py-8">
             <RobotIcon className="text-4xl mx-auto mb-2 text-slate-300" />
@@ -323,31 +387,11 @@ const ChatArea = () => {
           </div>
         )}
 
-        {/* Todo List */}
-        {todos.length > 0 && (
-          <div className="bg-slate-100 rounded-xl p-4">
-            <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase">任务列表</h4>
-            <div className="space-y-2">
-              {todos.map((todo, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm">
-                  <span className={`w-2 h-2 rounded-full ${
-                    todo.status === 'completed' ? 'bg-emerald-500' :
-                    todo.status === 'in_progress' ? 'bg-blue-500 animate-pulse' :
-                    'bg-slate-300'
-                  }`} />
-                  <span className={todo.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}>
-                    {todo.content}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Input Area */}
       <div className="p-4 bg-white border-t border-slate-200">
-        <div className="max-w-4xl mx-auto relative">
+        <div className="max-w-none relative">
           <div className="flex items-end gap-3 p-2 bg-slate-50 border border-slate-200 rounded-2xl focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 transition-all">
             <button className="p-2 text-slate-400 hover:text-blue-600 transition-colors">
               <AttachIcon className="text-xl" />

@@ -15,6 +15,7 @@
             <div class="nav-tabs">
                 <button class="nav-tab active" data-tab="chat">Chat</button>
                 <button class="nav-tab" data-tab="skills">Skills</button>
+                <button class="nav-tab" data-tab="browser">Browser</button>
             </div>
         </nav>
 
@@ -43,6 +44,28 @@
                     <button id="create-skill-btn" class="btn-primary">Create Skill</button>
                 </div>
                 <div id="skills-list" class="skills-list"></div>
+            </div>
+
+            <!-- Browser Panel -->
+            <div id="browser-panel" class="panel">
+                <div class="browser-header">
+                    <h2>Remote Browser</h2>
+                    <div class="browser-actions">
+                        <button id="vnc-connect-btn" class="btn-primary">Connect</button>
+                        <button id="vnc-disconnect-btn" class="btn-secondary" disabled>Disconnect</button>
+                        <button id="vnc-open-btn" class="btn-secondary">Open in New Tab</button>
+                    </div>
+                </div>
+                <div class="browser-settings">
+                    <div class="form-group">
+                        <label for="vnc-url">VNC Web URL</label>
+                        <input type="text" id="vnc-url" placeholder="https://vnc.example.com/vnc.html?path=websockify">
+                    </div>
+                    <div id="vnc-status" class="vnc-status">Idle</div>
+                </div>
+                <div class="vnc-viewer">
+                    <iframe id="vnc-frame" title="VNC Viewer" src="about:blank"></iframe>
+                </div>
             </div>
         </main>
 
@@ -175,6 +198,7 @@ description: Brief description
     <script src="/static/js/recording.js"></script>
     <script src="/static/js/action-editor.js"></script>
     <script src="/static/js/skills.js"></script>
+    <script src="/static/js/vnc.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 import React from 'react';
+import VncViewer from './VncViewer';
 import { useChatStore } from '../store/chatStore';
 
 // Icons
@@ -76,7 +77,7 @@ const ExecutionPanel = () => {
   };
 
   return (
-    <aside className="w-80 bg-white border-l border-slate-200 flex flex-col shrink-0">
+    <aside className="w-[420px] bg-white border-l border-slate-200 flex flex-col shrink-0">
       <div className="p-4 border-b border-slate-100 flex items-center justify-between">
         <span className="font-bold text-sm flex items-center gap-2">
           <CycloneIcon className="text-blue-600" />
@@ -90,6 +91,7 @@ const ExecutionPanel = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6 hide-scrollbar">
+        <VncViewer title="Remote Browser" autoConnect frameHeightClass="h-52" compact />
         {allSteps.length === 0 ? (
           <div className="text-center text-slate-400 py-8">
             <CycloneIcon className="text-3xl mx-auto mb-2 text-slate-300" />

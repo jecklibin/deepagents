@@ -48,6 +48,7 @@ class RecordingService:
         """Initialize the recording service."""
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
+        self._playwright_session: Any | None = None
         self._sessions: dict[str, dict[str, Any]] = {}
         self._stopped_sessions: dict[str, RecordingSession] = {}
         self._initialized = False
@@ -70,12 +71,13 @@ class RecordingService:
 
     def _worker_thread(self) -> None:
         """Worker thread that handles all Playwright operations."""
-        from playwright.sync_api import sync_playwright
+        from deepagents_web.services.playwright_provider import open_playwright_browser
 
-        self._playwright = sync_playwright().start()
-        self._browser = self._playwright.chromium.launch(headless=False)
+        self._playwright_session = open_playwright_browser(browser_type="chromium", headless=False)
+        self._playwright = self._playwright_session.playwright
+        self._browser = self._playwright_session.browser
         self._initialized = True
-        logger.info("Playwright browser initialized for recording")
+        logger.info("Playwright browser initialized for recording (%s)", self._playwright_session.mode)
 
         while self._running:
             try:
@@ -600,12 +602,11 @@ class RecordingService:
 
     def _do_shutdown(self) -> None:
         """Shutdown (runs in worker thread)."""
-        if self._browser:
-            self._browser.close()
-            self._browser = None
-        if self._playwright:
-            self._playwright.stop()
-            self._playwright = None
+        if self._playwright_session:
+            self._playwright_session.close()
+        self._playwright_session = None
+        self._browser = None
+        self._playwright = None
         self._initialized = False
         self._running = False
 
@@ -978,46 +979,46 @@ class RecordingService:
         Returns:
             Dictionary with execution results including extracted data
         """
-        from playwright.sync_api import sync_playwright
+        from deepagents_web.services.playwright_provider import open_playwright_browser
 
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
-            context = browser.new_context()
-            page = context.new_page()
+        session = open_playwright_browser(browser_type="chromium", headless=True)
+        browser = session.browser
+        context = browser.new_context()
+        page = context.new_page()
 
-            try:
-                # Initialize context with inputs
-                ctx: dict[str, Any] = inputs.copy() if inputs else {}
+        try:
+            # Initialize context with inputs
+            ctx: dict[str, Any] = inputs.copy() if inputs else {}
 
-                # Navigate to start URL if provided
-                if start_url:
-                    page.goto(start_url, wait_until="domcontentloaded")
+            # Navigate to start URL if provided
+            if start_url:
+                page.goto(start_url, wait_until="domcontentloaded")
 
-                # Execute each action
-                for idx, action in enumerate(actions, start=1):
-                    try:
-                        self._execute_action(page, action, ctx)
-                    except Exception as exc:
-                        action_type = action.get("type", "unknown")
-                        logger.warning(f"Action {idx} ({action_type}) failed: {exc}")
-                        # Continue with next action unless it's critical
-                        if action_type in ("navigate",):
-                            raise
+            # Execute each action
+            for idx, action in enumerate(actions, start=1):
+                try:
+                    self._execute_action(page, action, ctx)
+                except Exception as exc:
+                    action_type = action.get("type", "unknown")
+                    logger.warning(f"Action {idx} ({action_type}) failed: {exc}")
+                    # Continue with next action unless it's critical
+                    if action_type in ("navigate",):
+                        raise
 
-                result = {
-                    "success": True,
-                    "url": page.url,
-                    "title": page.title(),
-                    "extracted": ctx,
-                }
-            except Exception as exc:
-                result = {
-                    "success": False,
-                    "error": str(exc),
-                    "extracted": ctx if "ctx" in locals() else {},
-                }
-            finally:
-                context.close()
-                browser.close()
+            result = {
+                "success": True,
+                "url": page.url,
+                "title": page.title(),
+                "extracted": ctx,
+            }
+        except Exception as exc:
+            result = {
+                "success": False,
+                "error": str(exc),
+                "extracted": ctx if "ctx" in locals() else {},
+            }
+        finally:
+            context.close()
+            session.close()
 
-            return result
+        return result

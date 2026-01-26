@@ -254,6 +254,86 @@ body {
     padding: 1rem;
 }
 
+/* Browser Panel */
+#browser-panel {
+    padding: 1rem;
+    gap: 1rem;
+}
+
+.browser-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.browser-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.browser-settings {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+}
+
+.browser-settings .form-group {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.vnc-status {
+    color: var(--text-dim);
+    font-size: 0.875rem;
+    min-width: 140px;
+}
+
+.vnc-status.connected {
+    color: var(--primary);
+}
+
+.vnc-status.error {
+    color: var(--danger);
+}
+
+.vnc-viewer {
+    flex: 1;
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    min-height: 240px;
+}
+
+.vnc-viewer iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #000000;
+}
+
+@media (max-width: 900px) {
+    .browser-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .browser-actions {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .browser-settings {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .vnc-status {
+        min-width: 0;
+    }
+}
+
 .skill-card {
     background: var(--bg-light);
     border-radius: 0.5rem;

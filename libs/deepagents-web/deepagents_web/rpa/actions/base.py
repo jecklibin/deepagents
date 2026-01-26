@@ -136,6 +136,7 @@ class ExecutionContext:
         self._browser: Browser | None = None
         self._page: Page | None = None
         self._playwright: Any = None
+        self._playwright_mode: str | None = None
 
     @property
     def browser(self) -> Browser | None:
@@ -167,6 +168,16 @@ class ExecutionContext:
         """Set the playwright instance."""
         self._playwright = value
 
+    @property
+    def playwright_mode(self) -> str | None:
+        """Get the Playwright connection mode."""
+        return self._playwright_mode
+
+    @playwright_mode.setter
+    def playwright_mode(self, value: str | None) -> None:
+        """Set the Playwright connection mode."""
+        self._playwright_mode = value
+
     def set_var(self, name: str, value: Any) -> None:
         """Set a variable."""
         self.variables[name] = value
@@ -189,15 +200,19 @@ class ExecutionContext:
                 self._page.close()
             self._page = None
 
-        if self._browser:
-            with contextlib.suppress(Exception):
-                self._browser.close()
-            self._browser = None
+        if self._browser or self._playwright:
+            from deepagents_web.services.playwright_provider import PlaywrightSession
 
-        if self._playwright:
-            with contextlib.suppress(Exception):
-                self._playwright.stop()
-            self._playwright = None
+            session = PlaywrightSession(
+                playwright=self._playwright,
+                browser=self._browser,
+                mode=self._playwright_mode or "local",
+            )
+            session.close()
+
+        self._browser = None
+        self._playwright = None
+        self._playwright_mode = None
 
 
 class ActionBase(ABC):

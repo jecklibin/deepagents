@@ -338,6 +338,7 @@ async def create_cli_agent(
     enable_memory: bool = True,
     enable_skills: bool = True,
     enable_shell: bool = True,
+    enable_mcp: bool = True,
     enable_cua: bool = True,
     cua_config: CuaConfig | None = None,
     subagents: list[SubAgent | CompiledSubAgent] | None = None,
@@ -395,11 +396,12 @@ async def create_cli_agent(
     agent_middleware = []
 
     # Load Playwright MCP tools with persistent session
-    try:
-        mcp_tools = await get_mcp_tools()
-        tools.extend(mcp_tools)
-    except Exception as e:
-        console.print(f"[yellow]⚠ Playwright MCP not available: {e}[/yellow]")
+    if enable_mcp:
+        try:
+            mcp_tools = await get_mcp_tools()
+            tools.extend(mcp_tools)
+        except Exception as e:
+            console.print(f"[yellow]⚠ Playwright MCP not available: {e}[/yellow]")
 
     # Add memory middleware
     if enable_memory:

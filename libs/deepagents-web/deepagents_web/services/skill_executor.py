@@ -90,11 +90,19 @@ class SkillExecutor:
         """Run script.py file and capture output."""
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
+        temp_dir: Path | None = None
 
         # Pass inputs as environment variables
         if inputs:
             for key, value in inputs.items():
                 env[f"HYBRID_INPUT_{key.upper()}"] = json.dumps(value) if not isinstance(value, str) else value
+
+        from deepagents_web.services.playwright_script_patch import (
+            cleanup_patched_script,
+            prepare_script_for_remote,
+        )
+
+        script_path, temp_dir = prepare_script_for_remote(script_path)
 
         # Use Popen for better control over encoding on Windows
         # Security: script_path is validated to be within skill directory
@@ -112,6 +120,8 @@ class SkillExecutor:
             process.kill()
             msg = "Script execution timed out"
             raise RuntimeError(msg) from None
+        finally:
+            cleanup_patched_script(temp_dir)
 
         # Decode with error handling
         stdout = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""

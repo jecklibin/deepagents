@@ -6,6 +6,7 @@ export { default as Header } from './components/Header';
 export { default as SkillsSidebar } from './components/SkillsSidebar';
 export { default as ChatArea } from './components/ChatArea';
 export { default as ExecutionPanel } from './components/ExecutionPanel';
+export { default as BrowserStage } from './components/BrowserStage';
 export { default as RiskModal } from './components/RiskModal';
 export { default as RecordingModal } from './components/RecordingModal';
 export { default as SkillDetailModal } from './components/SkillDetailModal';

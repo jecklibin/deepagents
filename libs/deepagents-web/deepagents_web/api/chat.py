@@ -26,6 +26,7 @@ def get_agent_service() -> AgentService:
         _agent_service = AgentService(
             auto_approve=web_settings.auto_approve,
             enable_cua=web_settings.enable_cua,
+            enable_mcp=web_settings.enable_mcp,
             cua_model=web_settings.cua_model,
             cua_provider=web_settings.cua_provider,
             cua_os=web_settings.cua_os,
