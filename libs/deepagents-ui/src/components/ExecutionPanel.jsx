@@ -8,6 +8,12 @@ const CycloneIcon = () => (
   </svg>
 );
 
+const TaskListIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 13h2v-2H3zm0 4h2v-2H3zm0-8h2V7H3zm4 4h14v-2H7zm0 4h14v-2H7zm0-8v2h14V9z" fill="currentColor"/>
+  </svg>
+);
+
 const MAX_VISIBLE_TODOS = 5;
 const MAX_VISIBLE_TOOLS = 6;
 const COLLAPSE_CHAR_LIMIT = 800;
@@ -46,7 +52,6 @@ const ExecutionPanel = () => {
   const visibleTools = showAllTools ? toolCalls : toolCalls.slice(0, MAX_VISIBLE_TOOLS);
   const hasMoreTodos = todos.length > MAX_VISIBLE_TODOS;
   const hasMoreTools = toolCalls.length > MAX_VISIBLE_TOOLS;
-  const hasData = todos.length > 0 || toolCalls.length > 0;
 
   const renderStatusPill = (status) => {
     if (status === 'running') {
@@ -98,8 +103,9 @@ const ExecutionPanel = () => {
   };
 
   return (
-    <aside className="w-80 bg-white border-l border-slate-200 flex flex-col shrink-0">
-      <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+    <aside className="w-80 bg-white border-l border-slate-200 flex flex-col shrink-0 relative">
+      {/* Header */}
+      <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
         <span className="font-bold text-sm flex items-center gap-2">
           <CycloneIcon className="text-blue-600" />
           当前任务执行链
@@ -111,109 +117,105 @@ const ExecutionPanel = () => {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 hide-scrollbar">
-        {!hasData ? (
-          <div className="text-center text-slate-400 py-8">
-            <CycloneIcon className="text-3xl mx-auto mb-2 text-slate-300" />
-            <p className="text-sm">暂无执行任务</p>
-            <p className="text-xs mt-1">开始对话后将显示执行过程</p>
+      {/* Task Plan - Fixed at top */}
+      <div className="shrink-0 p-4 pb-2 bg-white border-b border-slate-100 sticky top-0 z-10">
+        <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-bold text-blue-700 uppercase tracking-widest flex items-center gap-2">
+              <TaskListIcon />
+              任务计划
+            </h4>
+            {hasMoreTodos && (
+              <button
+                className="text-[10px] text-blue-500 hover:text-blue-700 transition-colors"
+                onClick={() => setShowAllTodos((prev) => !prev)}
+              >
+                {showAllTodos ? '收起' : `展开 ${todos.length - MAX_VISIBLE_TODOS} 项`}
+              </button>
+            )}
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                  思考过程
-                </h4>
-                {hasMoreTodos && (
-                  <button
-                    className="text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
-                    onClick={() => setShowAllTodos((prev) => !prev)}
-                  >
-                    {showAllTodos ? '收起' : `展开 ${todos.length - MAX_VISIBLE_TODOS} 项`}
-                  </button>
-                )}
-              </div>
-              {visibleTodos.length === 0 ? (
-                <p className="text-[11px] text-slate-400">
-                  {isStreaming ? '思考步骤生成中...' : '未生成计划'}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {visibleTodos.map((todo, index) => (
-                    <div key={`${todo.content}-${index}`} className="flex items-start gap-2 text-xs">
-                      <span className={`mt-1 w-2 h-2 rounded-full ${
-                        todo.status === 'completed' ? 'bg-emerald-500' :
-                        todo.status === 'in_progress' ? 'bg-blue-500 animate-pulse' :
-                        'bg-slate-300'
-                      }`} />
-                      <div>
-                        <p className={todo.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}>
-                          {todo.content}
-                        </p>
-                        {todo.activeForm && (
-                          <p className="text-[10px] text-slate-400 mt-0.5">{todo.activeForm}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+          {visibleTodos.length === 0 ? (
+            <p className="text-[11px] text-blue-400">
+              {isStreaming ? '任务计划生成中...' : '暂无任务计划'}
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-40 overflow-y-auto hide-scrollbar">
+              {visibleTodos.map((todo, index) => (
+                <div key={`${todo.content}-${index}`} className="flex items-start gap-2 text-xs">
+                  <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${
+                    todo.status === 'completed' ? 'bg-emerald-500' :
+                    todo.status === 'in_progress' ? 'bg-blue-500 animate-pulse' :
+                    'bg-slate-300'
+                  }`} />
+                  <div className="min-w-0">
+                    <p className={`${todo.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'} break-words`}>
+                      {todo.content}
+                    </p>
+                    {todo.activeForm && (
+                      <p className="text-[10px] text-blue-400 mt-0.5">{todo.activeForm}</p>
+                    )}
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
+          )}
+        </div>
+      </div>
 
-            <div className="bg-white rounded-xl p-4 border border-slate-200">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                  执行结果
-                </h4>
-                {hasMoreTools && (
-                  <button
-                    className="text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
-                    onClick={() => setShowAllTools((prev) => !prev)}
-                  >
-                    {showAllTools ? '收起' : `展开 ${toolCalls.length - MAX_VISIBLE_TOOLS} 项`}
-                  </button>
-                )}
-              </div>
-              {visibleTools.length === 0 ? (
-                <p className="text-[11px] text-slate-400">暂无执行结果</p>
-              ) : (
-                <div className="space-y-3">
-                  {visibleTools.map((tool, index) => {
-                    const hasResult = tool.result !== undefined && tool.result !== null;
-                    return (
-                      <div key={tool.id || `${tool.name}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/40 p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h4 className="text-xs font-bold text-slate-700">{tool.name || 'tool'}</h4>
-                            <p className="text-[10px] text-slate-400 mt-0.5">
-                              {tool.status === 'running'
-                                ? '执行中...'
-                                : tool.status === 'error'
-                                  ? '执行失败'
-                                  : tool.status === 'completed'
-                                    ? '执行完成'
-                                    : '等待执行'}
-                            </p>
-                          </div>
-                          {renderStatusPill(tool.status)}
-                        </div>
-                        {renderPayloadDetails('输入', tool.input)}
-                        {hasResult
-                          ? renderPayloadDetails('结果', tool.result, tool.status === 'error' ? 'error' : 'default')
-                          : (
-                            <p className="text-[10px] text-slate-400 mt-2">
-                              {tool.status === 'running' ? '等待结果...' : '暂无结果'}
-                            </p>
-                          )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 hide-scrollbar">
+        {/* Execution Results */}
+        <div className="bg-white rounded-xl p-4 border border-slate-200">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+              执行结果
+            </h4>
+            {hasMoreTools && (
+              <button
+                className="text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
+                onClick={() => setShowAllTools((prev) => !prev)}
+              >
+                {showAllTools ? '收起' : `展开 ${toolCalls.length - MAX_VISIBLE_TOOLS} 项`}
+              </button>
+            )}
           </div>
-        )}
+          {visibleTools.length === 0 ? (
+            <p className="text-[11px] text-slate-400">暂无执行结果</p>
+          ) : (
+            <div className="space-y-3">
+              {visibleTools.map((tool, index) => {
+                const hasResult = tool.result !== undefined && tool.result !== null;
+                return (
+                  <div key={tool.id || `${tool.name}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/40 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-700">{tool.name || 'tool'}</h4>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {tool.status === 'running'
+                            ? '执行中...'
+                            : tool.status === 'error'
+                              ? '执行失败'
+                              : tool.status === 'completed'
+                                ? '执行完成'
+                                : '等待执行'}
+                        </p>
+                      </div>
+                      {renderStatusPill(tool.status)}
+                    </div>
+                    {renderPayloadDetails('输入', tool.input)}
+                    {hasResult
+                      ? renderPayloadDetails('结果', tool.result, tool.status === 'error' ? 'error' : 'default')
+                      : (
+                        <p className="text-[10px] text-slate-400 mt-2">
+                          {tool.status === 'running' ? '等待结果...' : '暂无结果'}
+                        </p>
+                      )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* System Resources */}
         <div className="pt-4 border-t border-slate-100">

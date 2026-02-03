@@ -12,6 +12,7 @@ export const createChatStore = (wsService) => create((set, get) => ({
   todos: [],
   toolCalls: [],
   error: null,
+  thinkingStartTime: null, // Track when thinking started
 
   // Session management
   setCurrentSession: (sessionId) => {
@@ -80,18 +81,43 @@ export const createChatStore = (wsService) => create((set, get) => ({
           set((state) => {
             const messages = [...state.messages];
             const lastMessage = messages[messages.length - 1];
+            let thinkingStartTime = state.thinkingStartTime;
+
+            // Check for <think> tag start
+            if (textContent.includes('<think>') && !thinkingStartTime) {
+              thinkingStartTime = Date.now();
+            }
+
             if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
-              lastMessage.content += textContent;
+              const newContent = lastMessage.content + textContent;
+
+              // Check for </think> tag end and calculate duration
+              if (newContent.includes('</think>') && thinkingStartTime && !lastMessage.thinkingDuration) {
+                const duration = (Date.now() - thinkingStartTime) / 1000;
+                lastMessage.thinkingDuration = duration;
+                thinkingStartTime = null; // Reset for next thinking block
+              }
+
+              lastMessage.content = newContent;
             } else {
-              messages.push({
+              const newMessage = {
                 id: Date.now(),
                 type: 'assistant',
                 content: textContent,
                 timestamp: new Date().toISOString(),
                 isStreaming: true,
-              });
+              };
+
+              // Check if this first chunk contains </think>
+              if (textContent.includes('</think>') && thinkingStartTime) {
+                const duration = (Date.now() - thinkingStartTime) / 1000;
+                newMessage.thinkingDuration = duration;
+                thinkingStartTime = null;
+              }
+
+              messages.push(newMessage);
             }
-            return { messages };
+            return { messages, thinkingStartTime };
           });
         }
         break;

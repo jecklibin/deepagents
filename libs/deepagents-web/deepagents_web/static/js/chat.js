@@ -16,6 +16,8 @@ class ChatManager {
         this.currentAssistantMessage = null;
         this.pendingInterrupt = null;
         this.isProcessing = false;
+        this.thinkingStartTime = null; // Track thinking start time
+        this.currentThinkingDuration = null; // Store actual thinking duration
 
         this.setupEventListeners();
     }
@@ -164,7 +166,20 @@ class ChatManager {
             this.currentAssistantMessage = this.addMessage('assistant', '');
             this.currentAssistantMessage.textContent = '';
         }
+
+        // Check for <think> tag start
+        if (text.includes('<think>') && !this.thinkingStartTime) {
+            this.thinkingStartTime = Date.now();
+        }
+
         this.currentAssistantMessage.textContent += text;
+
+        // Check for </think> tag end
+        const fullContent = this.currentAssistantMessage.textContent;
+        if (fullContent.includes('</think>') && this.thinkingStartTime && !this.currentThinkingDuration) {
+            this.currentThinkingDuration = (Date.now() - this.thinkingStartTime) / 1000;
+        }
+
         this.scrollToBottom();
     }
 
@@ -242,10 +257,89 @@ class ChatManager {
         if (this.currentAssistantMessage) {
             // Render markdown for the complete message
             const text = this.currentAssistantMessage.textContent;
-            this.currentAssistantMessage.innerHTML = this.renderMarkdown(text);
+            this.currentAssistantMessage.innerHTML = this.renderContentWithThinking(text, this.currentThinkingDuration);
         }
         this.currentAssistantMessage = null;
+        this.thinkingStartTime = null;
+        this.currentThinkingDuration = null;
         this.setProcessing(false);
+    }
+
+    // Parse and render content with thinking blocks
+    renderContentWithThinking(content, actualDuration = null) {
+        const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
+        let result = '';
+        let lastIndex = 0;
+        let match;
+        let thinkingContent = '';
+
+        while ((match = thinkRegex.exec(content)) !== null) {
+            // Add text before the think tag
+            if (match.index > lastIndex) {
+                const textBefore = content.slice(lastIndex, match.index).trim();
+                if (textBefore) {
+                    result += this.renderMarkdown(textBefore);
+                }
+            }
+            // Accumulate thinking content
+            thinkingContent += (thinkingContent ? '\n\n' : '') + match[1].trim();
+            lastIndex = match.index + match[0].length;
+        }
+
+        // Add thinking block if any
+        if (thinkingContent) {
+            let thinkingTime;
+            if (actualDuration !== null && actualDuration !== undefined) {
+                // Use actual duration
+                if (actualDuration < 60) {
+                    thinkingTime = `${actualDuration.toFixed(1)} 秒`;
+                } else {
+                    thinkingTime = `${(actualDuration / 60).toFixed(1)} 分钟`;
+                }
+            } else {
+                // Fallback: estimate based on content length
+                const wordCount = thinkingContent.split(/\s+/).length;
+                const estimatedSeconds = Math.max(1, Math.round(wordCount / 50));
+                thinkingTime = estimatedSeconds < 60
+                    ? `${estimatedSeconds} 秒`
+                    : `${(estimatedSeconds / 60).toFixed(1)} 分钟`;
+            }
+
+            const thinkingId = `thinking-${Date.now()}`;
+            result = `
+                <div class="thinking-block">
+                    <button class="thinking-toggle" onclick="document.getElementById('${thinkingId}').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('expanded')">
+                        <span class="chevron">›</span>
+                        <span class="thinking-icon">💡</span>
+                        <span>已深度思考（用时 ${thinkingTime}）</span>
+                    </button>
+                    <div id="${thinkingId}" class="thinking-content hidden">
+                        <pre>${this.escapeHtml(thinkingContent)}</pre>
+                    </div>
+                </div>
+            ` + result;
+        }
+
+        // Add remaining text after last think tag
+        if (lastIndex < content.length) {
+            const remainingText = content.slice(lastIndex).trim();
+            if (remainingText) {
+                result += this.renderMarkdown(remainingText);
+            }
+        }
+
+        // If no think tags found, return original rendered content
+        if (!thinkingContent && result === '') {
+            return this.renderMarkdown(content);
+        }
+
+        return result;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     renderMarkdown(text) {

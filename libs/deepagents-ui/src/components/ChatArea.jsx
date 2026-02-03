@@ -70,6 +70,108 @@ const CloseIcon = () => (
   </svg>
 );
 
+const ThinkingIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="currentColor"/>
+  </svg>
+);
+
+const ChevronRightIcon = () => (
+  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/>
+  </svg>
+);
+
+// Thinking Block Component
+const ThinkingBlock = ({ content, thinkingTime }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="mb-3">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-2 text-sm text-cyan-600 hover:text-cyan-700 transition-colors group"
+      >
+        <span className={`transform transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>
+          <ChevronRightIcon />
+        </span>
+        <span className="flex items-center gap-1.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          已深度思考
+          {thinkingTime && <span className="text-cyan-500">（用时 {thinkingTime}）</span>}
+        </span>
+      </button>
+      {isExpanded && (
+        <div className="mt-2 pl-6 border-l-2 border-cyan-200">
+          <div className="text-sm text-slate-600 bg-cyan-50/50 rounded-lg p-3 whitespace-pre-wrap">
+            {content}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Parse content to extract thinking blocks
+const parseThinkingContent = (content, thinkingDuration = null) => {
+  const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  let thinkingContent = '';
+
+  while ((match = thinkRegex.exec(content)) !== null) {
+    // Add text before the think tag
+    if (match.index > lastIndex) {
+      const textBefore = content.slice(lastIndex, match.index).trim();
+      if (textBefore) {
+        parts.push({ type: 'text', content: textBefore });
+      }
+    }
+    // Accumulate thinking content
+    thinkingContent += (thinkingContent ? '\n\n' : '') + match[1].trim();
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add thinking block if any
+  if (thinkingContent) {
+    // Use actual duration if provided, otherwise estimate
+    let thinkingTime;
+    if (thinkingDuration !== null && thinkingDuration !== undefined) {
+      if (thinkingDuration < 60) {
+        thinkingTime = `${thinkingDuration.toFixed(1)} 秒`;
+      } else {
+        thinkingTime = `${(thinkingDuration / 60).toFixed(1)} 分钟`;
+      }
+    } else {
+      // Fallback: estimate based on content length
+      const wordCount = thinkingContent.split(/\s+/).length;
+      const estimatedSeconds = Math.max(1, Math.round(wordCount / 50));
+      thinkingTime = estimatedSeconds < 60
+        ? `${estimatedSeconds} 秒`
+        : `${(estimatedSeconds / 60).toFixed(1)} 分钟`;
+    }
+    parts.unshift({ type: 'thinking', content: thinkingContent, thinkingTime });
+  }
+
+  // Add remaining text after last think tag
+  if (lastIndex < content.length) {
+    const remainingText = content.slice(lastIndex).trim();
+    if (remainingText) {
+      parts.push({ type: 'text', content: remainingText });
+    }
+  }
+
+  // If no think tags found, return original content
+  if (parts.length === 0) {
+    return [{ type: 'text', content }];
+  }
+
+  return parts;
+};
+
 const ChatArea = () => {
   const [inputValue, setInputValue] = useState('');
   const chatContainerRef = useRef(null);
@@ -260,23 +362,37 @@ const ChatArea = () => {
           }
 
           if (message.type === 'assistant') {
+            const contentParts = parseThinkingContent(message.content, message.thinkingDuration);
             return (
               <div key={message.id} className="flex gap-4">
                 <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center text-white shrink-0">
                   <RobotIcon className="text-lg" />
                 </div>
-                <div className="max-w-[85%] space-y-4">
-                  <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm">
-                    <div className="text-sm text-slate-700 leading-relaxed prose prose-sm max-w-none">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
-                    </div>
-                    {message.isStreaming && (
-                      <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
-                    )}
-                    <span className="text-[10px] text-slate-400 mt-2 block">
-                      {formatTime(message.timestamp)}
-                    </span>
-                  </div>
+                <div className="max-w-[85%] space-y-2">
+                  {contentParts.map((part, index) => {
+                    if (part.type === 'thinking') {
+                      return (
+                        <ThinkingBlock
+                          key={`thinking-${index}`}
+                          content={part.content}
+                          thinkingTime={part.thinkingTime}
+                        />
+                      );
+                    }
+                    return (
+                      <div key={`text-${index}`} className="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm">
+                        <div className="text-sm text-slate-700 leading-relaxed prose prose-sm max-w-none">
+                          <ReactMarkdown>{part.content}</ReactMarkdown>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {message.isStreaming && (
+                    <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
+                  )}
+                  <span className="text-[10px] text-slate-400 block">
+                    {formatTime(message.timestamp)}
+                  </span>
                 </div>
               </div>
             );
