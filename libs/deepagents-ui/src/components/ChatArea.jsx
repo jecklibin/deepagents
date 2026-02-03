@@ -82,7 +82,6 @@ const ChatArea = () => {
     isConnected,
     isStreaming,
     pendingInterrupt,
-    todos,
     setCurrentSession,
     addSession,
     removeSession,
@@ -285,65 +284,53 @@ const ChatArea = () => {
 
           return null;
         })}
+      </div>
 
-        {/* Pending Interrupt */}
-        {pendingInterrupt && (
-          <div className="flex gap-4">
-            <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-white shrink-0">
-              <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 17q.425 0 .713-.288T13 16t-.288-.712T12 15t-.712.288T11 16t.288.713T12 17m-1-4h2V7h-2zm1 9q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1 2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12 22" fill="currentColor"/>
-              </svg>
+      {/* Pending Interrupt */}
+      {pendingInterrupt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-[480px] max-w-[92%] shadow-2xl overflow-hidden">
+            <div className="bg-amber-50 p-5 border-b border-amber-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
+                  <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 17q.425 0 .713-.288T13 16t-.288-.712T12 15t-.712.288T11 16t.288.713T12 17m-1-4h2V7h-2zm1 9q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2 12t.788-3.9t2.137-3.175T8.1 2.788T12 2t3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12 22" fill="currentColor"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm text-amber-800 font-semibold">操作确认</p>
+                  <p className="text-xs text-amber-600">以下操作需要您的批准</p>
+                </div>
+              </div>
             </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl rounded-tl-none p-4 shadow-sm max-w-[85%]">
-              <p className="text-sm text-amber-800 font-medium mb-2">需要您的确认</p>
-              <p className="text-sm text-amber-700 font-medium">{pendingInterrupt.tool_name}</p>
+            <div className="p-5 space-y-3">
+              <div className="text-sm text-slate-700 font-medium">{pendingInterrupt.tool_name}</div>
               {pendingInterrupt.description && (
-                <p className="text-xs text-amber-600 mt-1">{pendingInterrupt.description}</p>
+                <p className="text-xs text-slate-500">{pendingInterrupt.description}</p>
               )}
               {pendingInterrupt.args && (
-                <pre className="text-xs text-amber-600 mt-2 bg-amber-100 p-2 rounded overflow-x-auto">
+                <pre className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200 max-h-56 overflow-auto">
                   {JSON.stringify(pendingInterrupt.args, null, 2)}
                 </pre>
               )}
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-3 pt-2">
                 <button
-                  className="px-4 py-1.5 bg-emerald-500 text-white rounded-lg text-sm hover:bg-emerald-600 transition-colors"
-                  onClick={() => respondToInterrupt('approve')}
-                >
-                  批准
-                </button>
-                <button
-                  className="px-4 py-1.5 bg-white border border-amber-300 rounded-lg text-sm text-amber-700 hover:bg-amber-100 transition-colors"
+                  className="flex-1 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
                   onClick={() => respondToInterrupt('reject')}
                 >
                   拒绝
                 </button>
+                <button
+                  className="flex-1 py-2 text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg transition-colors"
+                  onClick={() => respondToInterrupt('approve')}
+                >
+                  批准执行
+                </button>
               </div>
             </div>
           </div>
-        )}
-
-        {/* Todo List */}
-        {todos.length > 0 && (
-          <div className="bg-slate-100 rounded-xl p-4">
-            <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase">任务列表</h4>
-            <div className="space-y-2">
-              {todos.map((todo, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm">
-                  <span className={`w-2 h-2 rounded-full ${
-                    todo.status === 'completed' ? 'bg-emerald-500' :
-                    todo.status === 'in_progress' ? 'bg-blue-500 animate-pulse' :
-                    'bg-slate-300'
-                  }`} />
-                  <span className={todo.status === 'completed' ? 'text-slate-400 line-through' : 'text-slate-700'}>
-                    {todo.content}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Input Area */}
       <div className="p-4 bg-white border-t border-slate-200">

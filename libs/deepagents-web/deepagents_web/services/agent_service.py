@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from deepagents_cli.agent import create_cli_agent
 from deepagents_cli.config import SessionState, create_model
 from deepagents_cli.integrations.cua import CuaConfig, load_cua_config
+from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 from pydantic import ValidationError
 
@@ -232,12 +233,13 @@ class AgentService:
     def _iter_interrupts(self, data: Any) -> Iterable[Any]:
         if isinstance(data, dict):
             interrupts = data.get("__interrupt__")
-            if isinstance(interrupts, list):
+            # Support both list and tuple types for interrupts
+            if isinstance(interrupts, (list, tuple)):
                 for interrupt in interrupts:
                     yield interrupt
             for value in data.values():
                 yield from self._iter_interrupts(value)
-        elif isinstance(data, list):
+        elif isinstance(data, (list, tuple)):
             for item in data:
                 yield from self._iter_interrupts(item)
 
@@ -267,6 +269,22 @@ class AgentService:
             return
 
         message, _metadata = data
+
+        if isinstance(message, ToolMessage):
+            tool_name = getattr(message, "name", "")
+            tool_id = getattr(message, "tool_call_id", None)
+            tool_status = getattr(message, "status", "success")
+            tool_content = _format_tool_message_content(message.content)
+            yield WebSocketMessage(
+                type="tool_result",
+                data={
+                    "id": tool_id,
+                    "name": tool_name,
+                    "result": tool_content,
+                    "status": tool_status,
+                },
+            )
+            return
 
         if not hasattr(message, "content_blocks"):
             return
@@ -364,3 +382,20 @@ class AgentService:
         if parsed_args is None:
             return None
         return parsed_args
+
+
+def _format_tool_message_content(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            else:
+                try:
+                    parts.append(json.dumps(item, ensure_ascii=False))
+                except (TypeError, ValueError):
+                    parts.append(str(item))
+        return "\n".join(parts)
+    return str(content)

@@ -98,26 +98,67 @@ export const createChatStore = (wsService) => create((set, get) => ({
 
       case 'tool_call':
         if (msgData) {
-          set((state) => ({
-            toolCalls: [...state.toolCalls, {
-              id: msgData.id,
-              name: msgData.name,
-              input: msgData.args,
-              status: 'running'
-            }],
-          }));
+          const isTodoCall = msgData.name === 'write_todos';
+          const nextTodos = Array.isArray(msgData.args?.todos) ? msgData.args.todos : null;
+
+          set((state) => {
+            const nextState = {};
+
+            if (!isTodoCall) {
+              nextState.toolCalls = [...state.toolCalls, {
+                id: msgData.id,
+                name: msgData.name,
+                input: msgData.args,
+                status: 'running'
+              }];
+            }
+
+            if (nextTodos) {
+              nextState.todos = nextTodos;
+            }
+
+            return nextState;
+          });
         }
         break;
 
       case 'tool_result':
         if (msgData) {
-          set((state) => ({
-            toolCalls: state.toolCalls.map((tc) =>
-              tc.id === msgData.id
-                ? { ...tc, result: msgData.result, status: 'completed' }
-                : tc
-            ),
-          }));
+          const status = msgData.status
+            ? (msgData.status === 'success' ? 'completed' : 'error')
+            : 'completed';
+          set((state) => {
+            const toolCalls = [...state.toolCalls];
+            let matchIndex = toolCalls.findIndex((tc) => tc.id === msgData.id);
+
+            if (matchIndex === -1 && msgData.name) {
+              for (let i = toolCalls.length - 1; i >= 0; i -= 1) {
+                const tool = toolCalls[i];
+                if (tool.name === msgData.name && tool.status === 'running') {
+                  matchIndex = i;
+                  break;
+                }
+              }
+            }
+
+            if (matchIndex >= 0) {
+              toolCalls[matchIndex] = {
+                ...toolCalls[matchIndex],
+                result: msgData.result,
+                status,
+              };
+            } else {
+              toolCalls.push({
+                id: msgData.id || Date.now(),
+                name: msgData.name || 'tool',
+                input: null,
+                result: msgData.result,
+                status,
+              });
+            }
+
+            return { toolCalls };
+          });
         }
         break;
 

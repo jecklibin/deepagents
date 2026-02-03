@@ -34,7 +34,11 @@ def get_agent_service() -> AgentService:
     return _agent_service
 
 
-async def _receive_stop_signal(websocket: WebSocket, session: object) -> None:
+async def _receive_stop_signal(
+    websocket: WebSocket,
+    session: object,
+    pending_queue: asyncio.Queue[dict],
+) -> None:
     """Listen for stop signal while streaming."""
     while True:
         try:
@@ -43,6 +47,8 @@ async def _receive_stop_signal(websocket: WebSocket, session: object) -> None:
             if msg.type == "stop":
                 session.cancel()  # type: ignore[attr-defined]
                 break
+            await pending_queue.put(data)
+            break
         except Exception:  # noqa: BLE001
             break
 
@@ -60,16 +66,23 @@ async def websocket_chat(websocket: WebSocket, agent: str = "agent") -> None:  #
         await websocket.close(code=1011, reason="Failed to create session")
         return
 
+    pending_queue: asyncio.Queue[dict] = asyncio.Queue()
+
     try:
         await websocket.send_json({"type": "session", "data": {"session_id": session_id}})
 
         while True:
-            data = await websocket.receive_json()
+            if pending_queue.empty():
+                data = await websocket.receive_json()
+            else:
+                data = await pending_queue.get()
             msg = UserMessage(**data)
 
             if msg.type == "message" and msg.content:
                 # Start listening for stop signal concurrently
-                stop_task = asyncio.create_task(_receive_stop_signal(websocket, session))
+                stop_task = asyncio.create_task(
+                    _receive_stop_signal(websocket, session, pending_queue)
+                )
 
                 try:
                     async for ws_msg in service.stream_response(session, msg.content):
@@ -87,7 +100,9 @@ async def websocket_chat(websocket: WebSocket, agent: str = "agent") -> None:  #
             elif msg.type == "interrupt_response" and msg.data:
                 response = InterruptResponse(**msg.data)
                 # Start listening for stop signal concurrently
-                stop_task = asyncio.create_task(_receive_stop_signal(websocket, session))
+                stop_task = asyncio.create_task(
+                    _receive_stop_signal(websocket, session, pending_queue)
+                )
 
                 try:
                     async for ws_msg in service.resume_with_decision(session, response):
