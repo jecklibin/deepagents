@@ -384,6 +384,18 @@ async def create_cli_agent(
             source_content = get_default_coding_instructions()
             agent_md.write_text(source_content)
 
+        # Initialize project-level CONTEXT.md if it doesn't exist
+        project_deepagents_dir = settings.ensure_project_deepagents_dir()
+        if project_deepagents_dir:
+            project_context_md = project_deepagents_dir / "CONTEXT.md"
+            if not project_context_md.exists():
+                project_context_md.write_text(
+                    "# Project Context\n\n"
+                    "This file stores project-specific instructions and learned patterns. "
+                    "The agent is encouraged to update this file to remember project-specific "
+                    "information, coding standards, and user preferences."
+                )
+
     # Skills directories (if enabled)
     skills_dir = None
     project_skills_dir = None
