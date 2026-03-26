@@ -486,7 +486,8 @@ class DeepAgentsApp(App):
 
                 # Use run_worker to avoid blocking the main event loop
                 self._agent_worker = self.run_worker(
-                    self._run_agent_task(message),
+                    self._run_agent_task,
+                    message,
                     exclusive=False,
                 )
         except Exception as e:
