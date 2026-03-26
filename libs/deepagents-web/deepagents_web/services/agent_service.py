@@ -174,23 +174,23 @@ class AgentService:
                     subgraphs=True,
                     config=session.config,
                 ):
-                # Check if cancelled
-                if session.cancelled:
-                    yield WebSocketMessage(type="text", data="\n\n[Stopped by user]")
-                    break
+                    # Check if cancelled
+                    if session.cancelled:
+                        yield WebSocketMessage(type="text", data="\n\n[Stopped by user]")
+                        break
 
-                if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_SIZE:
-                    continue
+                    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_SIZE:
+                        continue
 
-                _namespace, stream_mode, data = chunk
+                    _namespace, stream_mode, data = chunk
 
-                if stream_mode == "updates":
-                    async for msg in self._handle_updates(session, data):
-                        yield msg
+                    if stream_mode == "updates":
+                        async for msg in self._handle_updates(session, data):
+                            yield msg
 
-                elif stream_mode == "messages":
-                    async for msg in self._handle_messages(data, tool_call_buffers):
-                        yield msg
+                    elif stream_mode == "messages":
+                        async for msg in self._handle_messages(data, tool_call_buffers):
+                            yield msg
 
         except (ValueError, KeyError, RuntimeError) as e:
             logger.exception("Stream error")
