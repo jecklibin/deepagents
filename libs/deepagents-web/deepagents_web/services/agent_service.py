@@ -88,34 +88,6 @@ class AgentService:
         )
         return session_id
 
-    async def _recreate_agent(self, session_state: SessionState) -> Pregel:
-        """Recreate agent instance for a request (Instant Instantiation)."""
-        model = create_model()
-
-        cua_config: CuaConfig | None = None
-        if self.enable_cua:
-            cua_config = load_cua_config(
-                model=self.cua_model,
-                os_type=self.cua_os,
-                provider_type=self.cua_provider,
-                trajectory_dir=self.cua_trajectory_dir,
-            )
-
-        # Configurator will automatically pick up CONTEXT.md and AGENTS.md
-        # since it uses settings.get_project_agent_md_paths()
-        from deepagents_cli.sessions import get_checkpointer
-        async with get_checkpointer() as checkpointer:
-            agent, _backend = await create_cli_agent(
-                model=model,
-                assistant_id=self.agent_name,
-                auto_approve=session_state.auto_approve,
-                enable_shell=True,
-                enable_cua=self.enable_cua,
-                cua_config=cua_config,
-                checkpointer=checkpointer,
-            )
-            return agent
-
     def get_session(self, session_id: str) -> AgentSession | None:
         """Get an existing session."""
         return self.sessions.get(session_id)
@@ -170,15 +142,38 @@ class AgentService:
         session.reset_cancel()
 
         try:
-            # Instant Instantiation
-            agent = await self._recreate_agent(session.session_state)
+            # Recreate agent instance for a request (Instant Instantiation)
+            model = create_model()
 
-            async for chunk in agent.astream(
-                stream_input,
-                stream_mode=["messages", "updates"],
-                subgraphs=True,
-                config=session.config,
-            ):
+            cua_config: CuaConfig | None = None
+            if self.enable_cua:
+                cua_config = load_cua_config(
+                    model=self.cua_model,
+                    os_type=self.cua_os,
+                    provider_type=self.cua_provider,
+                    trajectory_dir=self.cua_trajectory_dir,
+                )
+
+            # We need the checkpointer to maintain conversation history
+            # IT MUST STAY OPEN while agent.astream is running
+            from deepagents_cli.sessions import get_checkpointer
+            async with get_checkpointer() as checkpointer:
+                agent, _backend = await create_cli_agent(
+                    model=model,
+                    assistant_id=self.agent_name,
+                    auto_approve=session.session_state.auto_approve,
+                    enable_shell=True,
+                    enable_cua=self.enable_cua,
+                    cua_config=cua_config,
+                    checkpointer=checkpointer,
+                )
+
+                async for chunk in agent.astream(
+                    stream_input,
+                    stream_mode=["messages", "updates"],
+                    subgraphs=True,
+                    config=session.config,
+                ):
                 # Check if cancelled
                 if session.cancelled:
                     yield WebSocketMessage(type="text", data="\n\n[Stopped by user]")
