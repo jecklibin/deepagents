@@ -441,8 +441,28 @@ class DeepAgentsApp(App):
         # Mount the user message
         await self._mount_message(UserMessage(message))
 
-        # Recreate agent for each message (Instant Instantiation)
-        # This allows model hot-switching and environment alignment
+        # Show loading widget
+        self._loading_widget = LoadingWidget("Thinking")
+        await self._mount_message(self._loading_widget)
+        self._agent_running = True
+
+        # Disable cursor blink while agent is working
+        if self._chat_input:
+            self._chat_input.set_cursor_active(active=False)
+
+        # Use run_worker to avoid blocking the main event loop
+        # We pass the message and let the worker handle instantiation
+        self._agent_worker = self.run_worker(
+            self._run_agent_task(message),
+            exclusive=False,
+        )
+
+    async def _run_agent_task(self, message: str) -> None:
+        """Run the agent task in a background worker.
+
+        This runs in a worker thread so the main event loop stays responsive.
+        Instant Instantiation happens here to keep the checkpointer alive.
+        """
         try:
             from deepagents_cli.agent import create_cli_agent
             from deepagents_cli.config import create_model, settings
@@ -450,7 +470,7 @@ class DeepAgentsApp(App):
             from deepagents_cli.sessions import get_checkpointer
             from deepagents_cli.tools import fetch_url, http_request, web_search
 
-            model = create_model()  # Picks up any model changes
+            model = create_model()
             tools = [http_request, fetch_url]
             if settings.has_tavily:
                 tools.append(web_search)
@@ -458,6 +478,7 @@ class DeepAgentsApp(App):
             cua_config = load_cua_config() if getattr(self, "_enable_cua", True) else None
 
             # We need the checkpointer to maintain conversation history
+            # IT MUST STAY OPEN while execute_task_textual is running
             async with get_checkpointer() as checkpointer:
                 agent, composite_backend = await create_cli_agent(
                     model=model,
@@ -471,42 +492,15 @@ class DeepAgentsApp(App):
                     checkpointer=checkpointer,
                 )
 
-                # Update current agent and backend references
-                self._agent = agent
-                self._backend = composite_backend
-
-                # Show loading widget
-                self._loading_widget = LoadingWidget("Thinking")
-                await self._mount_message(self._loading_widget)
-                self._agent_running = True
-
-                # Disable cursor blink while agent is working
-                if self._chat_input:
-                    self._chat_input.set_cursor_active(active=False)
-
-                # Use run_worker to avoid blocking the main event loop
-                self._agent_worker = self.run_worker(
-                    self._run_agent_task,
-                    message,
-                    exclusive=False,
+                # Execute the task
+                await execute_task_textual(
+                    user_input=message,
+                    agent=agent,
+                    assistant_id=self._assistant_id,
+                    session_state=self._session_state,
+                    adapter=self._ui_adapter,
+                    backend=composite_backend,
                 )
-        except Exception as e:
-            await self._mount_message(ErrorMessage(f"Failed to initialize agent: {e}"))
-
-    async def _run_agent_task(self, message: str) -> None:
-        """Run the agent task in a background worker.
-
-        This runs in a worker thread so the main event loop stays responsive.
-        """
-        try:
-            await execute_task_textual(
-                user_input=message,
-                agent=self._agent,
-                assistant_id=self._assistant_id,
-                session_state=self._session_state,
-                adapter=self._ui_adapter,
-                backend=self._backend,
-            )
         except Exception as e:  # noqa: BLE001
             await self._mount_message(ErrorMessage(f"Agent error: {e}"))
         finally:
