@@ -36,12 +36,10 @@ class AgentSession:
     def __init__(
         self,
         session_id: str,
-        agent: Pregel,
         session_state: SessionState,
     ) -> None:
         """Initialize the agent session."""
         self.session_id = session_id
-        self.agent = agent
         self.session_state = session_state
         self.config = {"configurable": {"thread_id": session_state.thread_id}}
         self.pending_interrupts: dict[str, dict[str, Any]] = {}
@@ -83,6 +81,15 @@ class AgentService:
     async def create_session(self) -> str:
         """Create a new agent session."""
         session_id = str(uuid.uuid4())
+        session_state = SessionState(auto_approve=self.auto_approve)
+        self.sessions[session_id] = AgentSession(
+            session_id=session_id,
+            session_state=session_state,
+        )
+        return session_id
+
+    async def _recreate_agent(self, session_state: SessionState) -> Pregel:
+        """Recreate agent instance for a request (Instant Instantiation)."""
         model = create_model()
 
         cua_config: CuaConfig | None = None
@@ -94,22 +101,20 @@ class AgentService:
                 trajectory_dir=self.cua_trajectory_dir,
             )
 
-        agent, _backend = await create_cli_agent(
-            model=model,
-            assistant_id=self.agent_name,
-            auto_approve=self.auto_approve,
-            enable_shell=True,
-            enable_cua=self.enable_cua,
-            cua_config=cua_config,
-        )
-
-        session_state = SessionState(auto_approve=self.auto_approve)
-        self.sessions[session_id] = AgentSession(
-            session_id=session_id,
-            agent=agent,
-            session_state=session_state,
-        )
-        return session_id
+        # Configurator will automatically pick up CONTEXT.md and AGENTS.md
+        # since it uses settings.get_project_agent_md_paths()
+        from deepagents_cli.config import get_checkpointer
+        async with get_checkpointer() as checkpointer:
+            agent, _backend = await create_cli_agent(
+                model=model,
+                assistant_id=self.agent_name,
+                auto_approve=session_state.auto_approve,
+                enable_shell=True,
+                enable_cua=self.enable_cua,
+                cua_config=cua_config,
+                checkpointer=checkpointer,
+            )
+            return agent
 
     def get_session(self, session_id: str) -> AgentSession | None:
         """Get an existing session."""
@@ -165,7 +170,10 @@ class AgentService:
         session.reset_cancel()
 
         try:
-            async for chunk in session.agent.astream(
+            # Instant Instantiation
+            agent = await self._recreate_agent(session.session_state)
+
+            async for chunk in agent.astream(
                 stream_input,
                 stream_mode=["messages", "updates"],
                 subgraphs=True,
