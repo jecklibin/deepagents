@@ -265,6 +265,13 @@ async def run_textual_cli_async(
                 auto_approve=auto_approve,
                 cwd=Path.cwd(),
                 thread_id=thread_id,
+                sandbox_backend=sandbox_backend,
+                sandbox_type=sandbox_type if sandbox_type != "none" else None,
+                enable_cua=enable_cua,
+                cua_model=cua_model,
+                cua_provider=cua_provider,
+                cua_os=cua_os,
+                cua_trajectory_dir=cua_trajectory_dir,
             )
         except Exception as e:
             console.print(f"[red]❌ Failed to create agent: {e}[/red]")

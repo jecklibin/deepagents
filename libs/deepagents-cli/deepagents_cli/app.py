@@ -28,6 +28,7 @@ from deepagents_cli.widgets.messages import (
     ToolCallMessage,
     UserMessage,
 )
+from deepagents_cli.widgets.plan import PlanWidget
 from deepagents_cli.widgets.status import StatusBar
 from deepagents_cli.widgets.welcome import WelcomeBanner
 
@@ -142,10 +143,20 @@ class DeepAgentsApp(App):
         self._backend = backend
         self._auto_approve = auto_approve
         self._cwd = str(cwd) if cwd else str(Path.cwd())
-        # Avoid collision with App._thread_id
         self._lc_thread_id = thread_id
+        
+        # Store configuration for recreation
+        self._sandbox_backend = kwargs.get("sandbox_backend")
+        self._sandbox_type = kwargs.get("sandbox_type")
+        self._enable_cua = kwargs.get("enable_cua", True)
+        self._cua_model = kwargs.get("cua_model")
+        self._cua_provider = kwargs.get("cua_provider")
+        self._cua_os = kwargs.get("cua_os")
+        self._cua_trajectory_dir = kwargs.get("cua_trajectory_dir")
+
         self._status_bar: StatusBar | None = None
         self._chat_input: ChatInput | None = None
+        self._plan_widget: PlanWidget | None = None
         self._quit_pending = False
         self._session_state: TextualSessionState | None = None
         self._ui_adapter: TextualUIAdapter | None = None
@@ -162,6 +173,7 @@ class DeepAgentsApp(App):
         # Main chat area with scrollable messages
         with VerticalScroll(id="chat"):
             yield WelcomeBanner(id="welcome-banner")
+            yield PlanWidget(id="plan-panel")
             yield Container(id="messages")  # Container can have children mounted
 
         # Bottom app container - holds either ChatInput OR ApprovalMenu (swapped)
@@ -176,6 +188,7 @@ class DeepAgentsApp(App):
         """Initialize components after mount."""
         self._status_bar = self.query_one("#status-bar", StatusBar)
         self._chat_input = self.query_one("#input-area", ChatInput)
+        self._plan_widget = self.query_one("#plan-panel", PlanWidget)
 
         # Set initial auto-approve state
         if self._auto_approve:
@@ -198,6 +211,7 @@ class DeepAgentsApp(App):
                 request_approval=self._request_approval,
                 on_auto_approve_enabled=self._on_auto_approve_enabled,
                 scroll_to_bottom=self._scroll_chat_to_bottom,
+                request_plan_update=self._plan_widget.update_todos,
             )
             self._ui_adapter.set_token_tracker(self._token_tracker)
 
@@ -427,27 +441,55 @@ class DeepAgentsApp(App):
         # Mount the user message
         await self._mount_message(UserMessage(message))
 
-        # Check if agent is available
-        if self._agent and self._ui_adapter and self._session_state:
-            # Show loading widget
-            self._loading_widget = LoadingWidget("Thinking")
-            await self._mount_message(self._loading_widget)
-            self._agent_running = True
+        # Recreate agent for each message (Instant Instantiation)
+        # This allows model hot-switching and environment alignment
+        try:
+            from deepagents_cli.agent import create_cli_agent
+            from deepagents_cli.config import create_model, get_checkpointer, settings
+            from deepagents_cli.integrations.cua import load_cua_config
+            from deepagents_cli.tools import fetch_url, http_request, web_search
 
-            # Disable cursor blink while agent is working
-            if self._chat_input:
-                self._chat_input.set_cursor_active(active=False)
+            model = create_model()  # Picks up any model changes
+            tools = [http_request, fetch_url]
+            if settings.has_tavily:
+                tools.append(web_search)
 
-            # Use run_worker to avoid blocking the main event loop
-            # This allows the UI to remain responsive during agent execution
-            self._agent_worker = self.run_worker(
-                self._run_agent_task(message),
-                exclusive=False,
-            )
-        else:
-            await self._mount_message(
-                SystemMessage("Agent not configured. Run with --agent flag or use standalone mode.")
-            )
+            cua_config = load_cua_config() if getattr(self, "_enable_cua", True) else None
+
+            # We need the checkpointer to maintain conversation history
+            async with get_checkpointer() as checkpointer:
+                agent, composite_backend = await create_cli_agent(
+                    model=model,
+                    assistant_id=self._assistant_id,
+                    tools=tools,
+                    sandbox=getattr(self, "_sandbox_backend", None),
+                    sandbox_type=getattr(self, "_sandbox_type", None),
+                    auto_approve=self._session_state.auto_approve if self._session_state else self._auto_approve,
+                    enable_cua=bool(cua_config),
+                    cua_config=cua_config,
+                    checkpointer=checkpointer,
+                )
+
+                # Update current agent and backend references
+                self._agent = agent
+                self._backend = composite_backend
+
+                # Show loading widget
+                self._loading_widget = LoadingWidget("Thinking")
+                await self._mount_message(self._loading_widget)
+                self._agent_running = True
+
+                # Disable cursor blink while agent is working
+                if self._chat_input:
+                    self._chat_input.set_cursor_active(active=False)
+
+                # Use run_worker to avoid blocking the main event loop
+                self._agent_worker = self.run_worker(
+                    self._run_agent_task(message),
+                    exclusive=False,
+                )
+        except Exception as e:
+            await self._mount_message(ErrorMessage(f"Failed to initialize agent: {e}"))
 
     async def _run_agent_task(self, message: str) -> None:
         """Run the agent task in a background worker.
@@ -637,6 +679,14 @@ async def run_textual_app(
     auto_approve: bool = False,
     cwd: str | Path | None = None,
     thread_id: str | None = None,
+    # New parameters for instant instantiation
+    sandbox_backend: Any = None,
+    sandbox_type: str | None = None,
+    enable_cua: bool = True,
+    cua_model: str | None = None,
+    cua_provider: str | None = None,
+    cua_os: str | None = None,
+    cua_trajectory_dir: str | None = None,
 ) -> None:
     """Run the Textual application.
 
@@ -655,6 +705,13 @@ async def run_textual_app(
         auto_approve=auto_approve,
         cwd=cwd,
         thread_id=thread_id,
+        sandbox_backend=sandbox_backend,
+        sandbox_type=sandbox_type,
+        enable_cua=enable_cua,
+        cua_model=cua_model,
+        cua_provider=cua_provider,
+        cua_os=cua_os,
+        cua_trajectory_dir=cua_trajectory_dir,
     )
     await app.run_async()
 

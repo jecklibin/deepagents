@@ -11,6 +11,7 @@ from deepagents_cli.widgets.messages import (
     ToolCallMessage,
     UserMessage,
 )
+from deepagents_cli.widgets.plan import PlanWidget
 from deepagents_cli.widgets.status import StatusBar
 from deepagents_cli.widgets.welcome import WelcomeBanner
 
@@ -19,6 +20,7 @@ __all__ = [
     "ChatInput",
     "DiffMessage",
     "ErrorMessage",
+    "PlanWidget",
     "StatusBar",
     "SystemMessage",
     "ToolCallMessage",

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -50,6 +51,7 @@ class TextualUIAdapter:
         request_approval: Callable,  # async callable returning Future
         on_auto_approve_enabled: Callable[[], None] | None = None,
         scroll_to_bottom: Callable[[], None] | None = None,
+        request_plan_update: Callable[[list[dict]], Awaitable[None]] | None = None,
     ) -> None:
         """Initialize the adapter.
 
@@ -59,12 +61,14 @@ class TextualUIAdapter:
             request_approval: Callable that returns a Future for HITL approval
             on_auto_approve_enabled: Callback when auto-approve is enabled
             scroll_to_bottom: Callback to scroll chat to bottom
+            request_plan_update: Async callback to update the plan widget
         """
         self._mount_message = mount_message
         self._update_status = update_status
         self._request_approval = request_approval
         self._on_auto_approve_enabled = on_auto_approve_enabled
         self._scroll_to_bottom = scroll_to_bottom
+        self._request_plan_update = request_plan_update
 
         # State tracking
         self._current_assistant_message: AssistantMessage | None = None
@@ -218,10 +222,12 @@ async def execute_task_textual(
                                 except ValidationError:
                                     raise
 
-                    # Check for todo updates (not yet implemented in Textual UI)
+                    # Check for todo updates
                     chunk_data = next(iter(data.values())) if data else None
                     if chunk_data and isinstance(chunk_data, dict) and "todos" in chunk_data:
-                        pass  # Future: render todo list widget
+                        todos = chunk_data["todos"]
+                        if adapter._request_plan_update:
+                            await adapter._request_plan_update(todos)
 
                 # Handle MESSAGES stream - for content and tool calls
                 elif current_stream_mode == "messages":
