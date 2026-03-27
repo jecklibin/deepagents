@@ -99,31 +99,37 @@ def _find_project_root(start_path: Path | None = None) -> Path | None:
 
 
 def _find_project_agent_md(project_root: Path) -> list[Path]:
-    """Find project-specific AGENTS.md file(s).
+    """Find project-specific AGENTS.md and CONTEXT.md file(s).
 
     Checks two locations and returns ALL that exist:
-    1. project_root/.deepagents/AGENTS.md
-    2. project_root/AGENTS.md
+    1. project_root/.deepagents/AGENTS.md and CONTEXT.md
+    2. project_root/AGENTS.md and CONTEXT.md
 
-    Both files will be loaded and combined if both exist.
+    Files will be loaded and combined if they exist.
 
     Args:
         project_root: Path to the project root directory.
 
     Returns:
-        List of paths to project AGENTS.md files (may contain 0, 1, or 2 paths).
+        List of paths to project AGENTS.md and CONTEXT.md files.
     """
     paths = []
 
-    # Check .deepagents/AGENTS.md (preferred)
-    deepagents_md = project_root / ".deepagents" / "AGENTS.md"
-    if deepagents_md.exists():
-        paths.append(deepagents_md)
+    # Check .deepagents/ directory (preferred)
+    deepagents_dir = project_root / ".deepagents"
+    if deepagents_dir.exists():
+        for name in ["AGENTS.md", "CONTEXT.md"]:
+            p = deepagents_dir / name
+            if p.exists():
+                paths.append(p)
 
-    # Check root AGENTS.md (fallback, but also include if both exist)
-    root_md = project_root / "AGENTS.md"
-    if root_md.exists():
-        paths.append(root_md)
+    # Check root directory
+    for name in ["AGENTS.md", "CONTEXT.md"]:
+        p = project_root / name
+        if p.exists():
+            # Avoid duplicates if they were already added from .deepagents/
+            if p not in paths:
+                paths.append(p)
 
     return paths
 
@@ -254,17 +260,15 @@ class Settings:
         """
         return Path.home() / ".deepagents" / agent_name / "AGENTS.md"
 
-    def get_project_agent_md_path(self) -> Path | None:
-        """Get project-level AGENTS.md path.
-
-        Returns path regardless of whether the file exists.
+    def get_project_agent_md_paths(self) -> list[Path]:
+        """Get all project-level AGENTS.md and CONTEXT.md paths.
 
         Returns:
-            Path to {project_root}/.deepagents/AGENTS.md, or None if not in a project
+            List of detected project AGENTS.md/CONTEXT.md files.
         """
         if not self.project_root:
-            return None
-        return self.project_root / ".deepagents" / "AGENTS.md"
+            return []
+        return _find_project_agent_md(self.project_root)
 
     @staticmethod
     def _is_valid_agent_name(agent_name: str) -> bool:

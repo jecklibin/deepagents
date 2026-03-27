@@ -36,14 +36,20 @@ class AgentSession:
     def __init__(
         self,
         session_id: str,
-        agent: Pregel,
         session_state: SessionState,
+        assistant_id: str,
     ) -> None:
         """Initialize the agent session."""
         self.session_id = session_id
-        self.agent = agent
         self.session_state = session_state
-        self.config = {"configurable": {"thread_id": session_state.thread_id}}
+        self.config = {
+            "configurable": {
+                "thread_id": session_state.thread_id,
+                # Keep a stable checkpoint namespace across per-turn agent
+                # re-instantiation so LangGraph can recover the same history.
+                "checkpoint_ns": f"web:{assistant_id}",
+            }
+        }
         self.pending_interrupts: dict[str, dict[str, Any]] = {}
         self.cancelled = False
 
@@ -83,31 +89,11 @@ class AgentService:
     async def create_session(self) -> str:
         """Create a new agent session."""
         session_id = str(uuid.uuid4())
-        model = create_model()
-
-        cua_config: CuaConfig | None = None
-        if self.enable_cua:
-            cua_config = load_cua_config(
-                model=self.cua_model,
-                os_type=self.cua_os,
-                provider_type=self.cua_provider,
-                trajectory_dir=self.cua_trajectory_dir,
-            )
-
-        agent, _backend = await create_cli_agent(
-            model=model,
-            assistant_id=self.agent_name,
-            auto_approve=self.auto_approve,
-            enable_shell=True,
-            enable_cua=self.enable_cua,
-            cua_config=cua_config,
-        )
-
         session_state = SessionState(auto_approve=self.auto_approve)
         self.sessions[session_id] = AgentSession(
             session_id=session_id,
-            agent=agent,
             session_state=session_state,
+            assistant_id=self.agent_name,
         )
         return session_id
 
@@ -115,9 +101,48 @@ class AgentService:
         """Get an existing session."""
         return self.sessions.get(session_id)
 
-    def delete_session(self, session_id: str) -> bool:
-        """Delete a session."""
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a session after performing a wrap-up."""
         if session_id in self.sessions:
+            session = self.sessions[session_id]
+            
+            # Perform final legacy capture before deletion
+            try:
+                # We need to recreate the agent one last time for the summary
+                from deepagents_cli.agent import wrap_up_session
+                
+                # Manual instantiation inside delete_session
+                from deepagents_cli.agent import create_cli_agent
+                from deepagents_cli.config import create_model
+                from deepagents_cli.integrations.cua import load_cua_config
+                from deepagents_cli.sessions import get_checkpointer
+                
+                model = create_model()
+                cua_config = load_cua_config(
+                    model=self.cua_model,
+                    os_type=self.cua_os,
+                    provider_type=self.cua_provider,
+                    trajectory_dir=self.cua_trajectory_dir,
+                ) if self.enable_cua else None
+
+                async with get_checkpointer() as checkpointer:
+                    agent, _backend = await create_cli_agent(
+                        model=model,
+                        assistant_id=self.agent_name,
+                        auto_approve=True, # Force True for final wrap-up
+                        enable_shell=True,
+                        enable_cua=self.enable_cua,
+                        cua_config=cua_config,
+                        checkpointer=checkpointer,
+                    )
+                    await wrap_up_session(
+                        agent=agent,
+                        config=session.config,
+                        assistant_id=self.agent_name,
+                    )
+            except Exception:
+                logger.exception(f"Failed to wrap up session {session_id}")
+            
             del self.sessions[session_id]
             return True
         return False
@@ -165,33 +190,59 @@ class AgentService:
         session.reset_cancel()
 
         try:
-            async for chunk in session.agent.astream(
-                stream_input,
-                stream_mode=["messages", "updates"],
-                subgraphs=True,
-                config=session.config,
-            ):
-                # Check if cancelled
-                if session.cancelled:
-                    yield WebSocketMessage(type="text", data="\n\n[Stopped by user]")
-                    break
+            # Recreate agent instance for a request (Instant Instantiation)
+            model = create_model()
 
-                if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_SIZE:
-                    continue
+            cua_config: CuaConfig | None = None
+            if self.enable_cua:
+                cua_config = load_cua_config(
+                    model=self.cua_model,
+                    os_type=self.cua_os,
+                    provider_type=self.cua_provider,
+                    trajectory_dir=self.cua_trajectory_dir,
+                )
 
-                _namespace, stream_mode, data = chunk
+            # We need the checkpointer to maintain conversation history
+            # IT MUST STAY OPEN while agent.astream is running
+            from deepagents_cli.sessions import get_checkpointer
+            async with get_checkpointer() as checkpointer:
+                agent, _backend = await create_cli_agent(
+                    model=model,
+                    assistant_id=self.agent_name,
+                    auto_approve=session.session_state.auto_approve,
+                    enable_shell=True,
+                    enable_cua=self.enable_cua,
+                    cua_config=cua_config,
+                    checkpointer=checkpointer,
+                )
 
-                if stream_mode == "updates":
-                    async for msg in self._handle_updates(session, data):
-                        yield msg
+                async for chunk in agent.astream(
+                    stream_input,
+                    stream_mode=["messages", "updates"],
+                    subgraphs=True,
+                    config=session.config,
+                ):
+                    # Check if cancelled
+                    if session.cancelled:
+                        yield WebSocketMessage(type="text", data="\n\n[Stopped by user]")
+                        break
 
-                elif stream_mode == "messages":
-                    async for msg in self._handle_messages(data, tool_call_buffers):
-                        yield msg
+                    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_SIZE:
+                        continue
 
-        except (ValueError, KeyError, RuntimeError) as e:
+                    _namespace, stream_mode, data = chunk
+
+                    if stream_mode == "updates":
+                        async for msg in self._handle_updates(session, data):
+                            yield msg
+
+                    elif stream_mode == "messages":
+                        async for msg in self._handle_messages(data, tool_call_buffers):
+                            yield msg
+
+        except Exception as e:
             logger.exception("Stream error")
-            yield WebSocketMessage(type="error", data=str(e))
+            yield WebSocketMessage(type="error", data=f"Stream error: {e}")
 
     async def _handle_updates(
         self,
