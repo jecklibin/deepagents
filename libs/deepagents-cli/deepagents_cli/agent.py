@@ -515,31 +515,57 @@ async def wrap_up_session(
 
     This implements the 'Legacy Capture' philosophy from ScienceClaw.
     """
+    cwd = Path.cwd()
+    context_path = cwd / ".deepagents" / "CONTEXT.md"
+    
     wrap_up_input = {
         "messages": [
             {
                 "role": "user",
                 "content": (
-                    "[SYSTEM] The session is closing. Please review the current conversation, "
-                    "extract any new project-specific knowledge, learned patterns, or coding "
-                    "standards discovered during this interaction. "
-                    "If there is valuable new information, use the `edit_file` tool to "
-                    "permanently record it into `.deepagents/CONTEXT.md`. "
-                    "If nothing new was learned, just acknowledge. Do not ask the user for anything."
+                    f"[SYSTEM] CRITICAL: The session is closing. You MUST perform a final 'Knowledge Capture'.\n\n"
+                    f"1. Review the entire conversation history.\n"
+                    f"2. Identify any new project paths, coding standards, technical decisions, or user preferences.\n"
+                    f"3. Use the `write_file` tool to update the file at `{context_path}` with a structured summary.\n\n"
+                    f"Format the content as follows:\n"
+                    f"# Project Context\n"
+                    f"## Recent Learned Patterns\n"
+                    f"- [List key learnings here]\n"
+                    f"## Project Structure Notes\n"
+                    f"- [List path/architecture discoveries]\n"
+                    f"## User Preferences\n"
+                    f"- [List persistent preferences]\n\n"
+                    f"You MUST write the full content. Do not leave it empty. "
+                    f"If no new knowledge was found, summarize the current task status instead. "
+                    f"Execute the tool call NOW."
                 ),
             }
         ]
     }
 
-    # Execute silently without streaming to the user
+    # Execute and wait for completion
     try:
-        async for _ in agent.astream(
+        from langgraph.types import Command
+        async for chunk in agent.astream(
             wrap_up_input,
             config=config,
-            stream_mode="updates",
+            stream_mode=["updates", "messages"],
         ):
-            pass
+            # If we hit an interrupt even with auto_approve (shouldn't happen, but for safety)
+            if isinstance(chunk, tuple) and len(chunk) == 3:
+                _ns, mode, data = chunk
+                if mode == "updates" and "__interrupt__" in data:
+                    # Force resume any interrupts during wrap-up
+                    interrupts = data["__interrupt__"]
+                    if interrupts:
+                        decisions = {}
+                        for interrupt in interrupts:
+                            # Approve everything in wrap-up
+                            action_reqs = interrupt.value.get("action_requests", [])
+                            decisions[interrupt.id] = {
+                                "decisions": [{"type": "approve"} for _ in action_reqs]
+                            }
+                        await agent.ainvoke(Command(resume=decisions), config=config)
     except Exception as e:
-        # Fail silently as this is a background cleanup task
         import logging
-        logging.getLogger(__name__).debug(f"Failed to wrap up session memory: {e}")
+        logging.getLogger(__name__).error(f"Failed to wrap up session memory: {e}")

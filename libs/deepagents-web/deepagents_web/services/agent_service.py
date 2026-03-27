@@ -120,7 +120,7 @@ class AgentService:
                     agent, _backend = await create_cli_agent(
                         model=model,
                         assistant_id=self.agent_name,
-                        auto_approve=session.session_state.auto_approve,
+                        auto_approve=True, # Force True for final wrap-up
                         enable_shell=True,
                         enable_cua=self.enable_cua,
                         cua_config=cua_config,
