@@ -92,9 +92,48 @@ class AgentService:
         """Get an existing session."""
         return self.sessions.get(session_id)
 
-    def delete_session(self, session_id: str) -> bool:
-        """Delete a session."""
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a session after performing a wrap-up."""
         if session_id in self.sessions:
+            session = self.sessions[session_id]
+            
+            # Perform final legacy capture before deletion
+            try:
+                # We need to recreate the agent one last time for the summary
+                from deepagents_cli.agent import wrap_up_session
+                
+                # Manual instantiation inside delete_session
+                from deepagents_cli.agent import create_cli_agent
+                from deepagents_cli.config import create_model
+                from deepagents_cli.integrations.cua import load_cua_config
+                from deepagents_cli.sessions import get_checkpointer
+                
+                model = create_model()
+                cua_config = load_cua_config(
+                    model=self.cua_model,
+                    os_type=self.cua_os,
+                    provider_type=self.cua_provider,
+                    trajectory_dir=self.cua_trajectory_dir,
+                ) if self.enable_cua else None
+
+                async with get_checkpointer() as checkpointer:
+                    agent, _backend = await create_cli_agent(
+                        model=model,
+                        assistant_id=self.agent_name,
+                        auto_approve=session.session_state.auto_approve,
+                        enable_shell=True,
+                        enable_cua=self.enable_cua,
+                        cua_config=cua_config,
+                        checkpointer=checkpointer,
+                    )
+                    await wrap_up_session(
+                        agent=agent,
+                        config=session.config,
+                        assistant_id=self.agent_name,
+                    )
+            except Exception:
+                logger.exception(f"Failed to wrap up session {session_id}")
+            
             del self.sessions[session_id]
             return True
         return False

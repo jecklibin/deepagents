@@ -115,8 +115,8 @@ async def websocket_chat(websocket: WebSocket, agent: str = "agent") -> None:  #
                 await websocket.send_json(WebSocketMessage(type="done", data=None).model_dump())
 
     except WebSocketDisconnect:
-        service.delete_session(session_id)
+        await service.delete_session(session_id)
     except (ValueError, KeyError, RuntimeError) as e:
         logger.exception("WebSocket error")
         await websocket.send_json(WebSocketMessage(type="error", data=str(e)).model_dump())
-        service.delete_session(session_id)
+        await service.delete_session(session_id)

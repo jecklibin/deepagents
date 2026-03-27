@@ -662,6 +662,53 @@ class DeepAgentsApp(App):
         if self._pending_approval_widget:
             self._pending_approval_widget.action_select_reject()
 
+    async def action_quit(self) -> None:
+        """Override quit to perform wrap-up first."""
+        if self._quit_pending:
+            return
+        self._quit_pending = True
+
+        # Notify user
+        await self._update_status("Finalizing: Saving project context to CONTEXT.md...")
+        
+        # Run wrap up task
+        try:
+            from deepagents_cli.agent import create_cli_agent, wrap_up_session
+            from deepagents_cli.config import create_model, settings
+            from deepagents_cli.integrations.cua import load_cua_config
+            from deepagents_cli.sessions import get_checkpointer
+            from deepagents_cli.tools import fetch_url, http_request, web_search
+
+            model = create_model()
+            tools = [http_request, fetch_url]
+            if settings.has_tavily:
+                tools.append(web_search)
+
+            cua_config = load_cua_config() if self._enable_cua else None
+
+            async with get_checkpointer() as checkpointer:
+                agent, _backend = await create_cli_agent(
+                    model=model,
+                    assistant_id=self._assistant_id,
+                    tools=tools,
+                    sandbox=self._sandbox_backend,
+                    sandbox_type=self._sandbox_type,
+                    auto_approve=True, # Auto approve for cleanup
+                    enable_cua=bool(cua_config),
+                    cua_config=cua_config,
+                    checkpointer=checkpointer,
+                )
+
+                await wrap_up_session(
+                    agent=agent,
+                    config={"configurable": {"thread_id": self._lc_thread_id}},
+                    assistant_id=self._assistant_id,
+                )
+        except Exception:
+            pass # Best effort
+
+        self.exit()
+
     def on_mouse_up(self, event: MouseUp) -> None:  # noqa: ARG002
         """Copy selection to clipboard on mouse release."""
         copy_selection_to_clipboard(self)
