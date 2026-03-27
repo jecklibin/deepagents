@@ -504,3 +504,42 @@ async def create_cli_agent(
         subagents=subagent_specs,
     ).with_config(config)
     return agent, composite_backend
+
+
+async def wrap_up_session(
+    agent: Pregel,
+    config: dict,
+    assistant_id: str,
+) -> None:
+    """Perform a final invisible turn to capture learned context into CONTEXT.md.
+
+    This implements the 'Legacy Capture' philosophy from ScienceClaw.
+    """
+    wrap_up_input = {
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "[SYSTEM] The session is closing. Please review the current conversation, "
+                    "extract any new project-specific knowledge, learned patterns, or coding "
+                    "standards discovered during this interaction. "
+                    "If there is valuable new information, use the `edit_file` tool to "
+                    "permanently record it into `.deepagents/CONTEXT.md`. "
+                    "If nothing new was learned, just acknowledge. Do not ask the user for anything."
+                ),
+            }
+        ]
+    }
+
+    # Execute silently without streaming to the user
+    try:
+        async for _ in agent.astream(
+            wrap_up_input,
+            config=config,
+            stream_mode="updates",
+        ):
+            pass
+    except Exception as e:
+        # Fail silently as this is a background cleanup task
+        import logging
+        logging.getLogger(__name__).debug(f"Failed to wrap up session memory: {e}")
